@@ -10,7 +10,8 @@ WriteMakefile(
 		'Modern::Perl'			=> 1.20250607,
 		'Test::More'			=> 1.302225,
 		'Test::HexDifferences'	=> 1.001,
-		'ZX81::Tokenize'		=> 0.001,
+		'ZX81::Tokenize'		=> 0.003,
         'Object::Tiny::RW'      => 1.07,
+        'Path::Tiny'            => 0.150,
     },
 );

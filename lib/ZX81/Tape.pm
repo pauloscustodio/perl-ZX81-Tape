@@ -33,6 +33,7 @@ sub as_bytes {
         $prog .= tokenize_basic($line);
     }
     my $prog_start = 0x407D;
+    my $e_ppc = $prog eq '' ? 0 : unpack("n", substr($prog, 0, 2));
 
     # Create an empty display file
     my $dfile = pack("C", 0x76);
@@ -49,38 +50,38 @@ sub as_bytes {
     # Create the system variables
     my $bytes = '';
     $bytes .= pack("C", 0);                 # VERSN 
-    $bytes .= pack("v", 0);                 # E_PPC
+    $bytes .= pack("v", $e_ppc);            # E_PPC
     $bytes .= pack("v", $dfile_start);      # D_FILE
     $bytes .= pack("v", $dfile_start + 1);  # DF_CC
     $bytes .= pack("v", $vars_start);       # VARS
     $bytes .= pack("v", 0);                 # DEST
     $bytes .= pack("v", $mem_end);          # E_LINE
-    $bytes .= pack("v", $mem_end - 1);      # CH_ADD
+    $bytes .= pack("v", $mem_end + 1);      # CH_ADD
     $bytes .= pack("v", 0);                 # X_PTR
-    $bytes .= pack("v", $mem_end);          # STKBOT
-    $bytes .= pack("v", $mem_end);          # STKEND
+    $bytes .= pack("v", $mem_end + 2);      # STKBOT
+    $bytes .= pack("v", $mem_end + 2);      # STKEND
     $bytes .= pack("C", 0);                 # BREG
     $bytes .= pack("v", 0x405d);            # MEM
     $bytes .= pack("C", 0);                 # not used
     $bytes .= pack("C", 2);                 # DF_SZ
-    $bytes .= pack("v", 1);                 # S_TOP
+    $bytes .= pack("v", 0);                 # S_TOP
     $bytes .= pack("v", 0xFFFF);            # LAST_K
-    $bytes .= pack("C", 0xFF);              # DEBOUNCE
+    $bytes .= pack("C", 0x0F);              # DEBOUNCE
     $bytes .= pack("C", 55);                # MARGIN
     $bytes .= pack("v", $dfile_start);      # NXTLIN
     $bytes .= pack("v", 0);                 # OLDPPC
     $bytes .= pack("C", 0);                 # FLAGX
     $bytes .= pack("v", 0);                 # STRLEN
-    $bytes .= pack("v", 0x0C8D);            # T_ADDR
+    $bytes .= pack("v", 0x0C6B);            # T_ADDR
     $bytes .= pack("v", 0);                 # SEED
     $bytes .= pack("v", 0xFFFF);            # FRAMES
     $bytes .= pack("C*", 0, 0);             # COORDS
     $bytes .= pack("C", 0xBC);              # PR_CC
     $bytes .= pack("C*", 33, 24);           # S_POSN
     $bytes .= pack("C", 0x40);              # CDFLAG - SLOW
-    $bytes .= pack("C", (0) x 33);          # Print buffer
-    $bytes .= pack("C", (0) x 30);          # Calculator's memory area
-    $bytes .= pack("C", (0) x 2);           # not used
+    $bytes .= pack("C*", (0) x 32, 0x76);   # Print buffer
+    $bytes .= pack("C*", (0) x 30);         # Calculator's memory area
+    $bytes .= pack("C*", (0) x 2);          # not used
 
     # Pack the BASIC program, dfile and vars areas
     $bytes .= $prog;

@@ -6,3 +6,5 @@ MYMETA.*
 *.swp
 *.bak
 *.tmp
+t/zxtext2p/zxtext2p
+t/zxtext2p/zxtext2p.exe

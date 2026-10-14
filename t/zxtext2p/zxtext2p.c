@@ -835,8 +835,15 @@ int main(int argc,char *argv[])
     memset(sysvarbuf,0,116);
 
     /* E_PPC    - Line number of line which has the edit cursor */
-    sysvarbuf[1]=iFirstLineNum & 255;   
-    sysvarbuf[2]=iFirstLineNum>>8;   /* E_PPC  high */
+	/* zx81 crashes if E_PPC is 0xFFFF which happens for an empty program */
+	if (iFirstLineNum == -1) {
+		sysvarbuf[1]=0;   
+		sysvarbuf[2]=0;   /* E_PPC  high */
+	}
+	else {
+		sysvarbuf[1]=iFirstLineNum & 255;   
+		sysvarbuf[2]=iFirstLineNum>>8;   /* E_PPC  high */
+	}
     /* D_FILE   - Address of display file */
     sysvarbuf[3]=iTemp & 255;   
     sysvarbuf[4]=iTemp++>>8;

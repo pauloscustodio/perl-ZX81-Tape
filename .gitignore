@@ -1,0 +1,8 @@
+blib/
+Makefile
+Makefile.old
+pm_to_blib
+MYMETA.*
+*.swp
+*.bak
+*.tmp

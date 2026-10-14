@@ -882,8 +882,8 @@ int main(int argc,char *argv[])
     sysvarbuf[39]=0x6b;  
     sysvarbuf[40]=0x0c;
     /* FRAMES      - Seed for random number generation. Set by RAND */
-    sysvarbuf[43]=0x7d;  
-    sysvarbuf[44]=0xfd;
+    sysvarbuf[43]=0xff;  
+    sysvarbuf[44]=0xff;
     /* PR_CC       - Least significant byte of address of next position for LPRINT to print */
     sysvarbuf[47]=0xbc;
     /* S_POSN x    - Column number for print position */
@@ -914,8 +914,7 @@ int main(int argc,char *argv[])
 
     /* Write and empty VARS area */
     sysvarbuf[0]=0x80;
-    sysvarbuf[1]=0x76;
-    fwrite (sysvarbuf,1,2,fOut);
+    fwrite (sysvarbuf,1,1,fOut);
 
 
     if(fOut!=stdout) fclose(fOut);

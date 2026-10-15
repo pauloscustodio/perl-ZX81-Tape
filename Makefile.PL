@@ -24,8 +24,13 @@ sub MY::postamble {
 perltidy:
 \tfind lib -name '*.pm' -o -name '*.pl' -o -name '*.t' | xargs perltidy -b
 
+# --- readme ---
+readme:
+\tperl -MPod::Markdown -e "Pod::Markdown->new->filter(qw(lib/ZX81/Tape.pm))" > README.md
+
 # --- inittests ---
 inittests:
 \t$(MAKE) -C t
+
 END
 }

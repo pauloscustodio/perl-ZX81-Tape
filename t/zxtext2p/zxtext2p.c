@@ -738,6 +738,14 @@ int main(int argc,char *argv[])
                 }
 
       
+				/* Handle hex escapes also in REM lines */
+				if(*ptr=='\\' && isxdigit(ptr[1]) && isxdigit(ptr[2])) {
+					char hex[] = {ptr[1], ptr[2], '\0'};
+					*outptr++=strtol(hex,NULL,16);
+					ptr+=3;
+					continue;
+				}
+
                 /* Handle escaped characters (block graphics and quote char) */
                 if(!in_rem && *ptr=='\\') {
                     switch(ptr[1]) {

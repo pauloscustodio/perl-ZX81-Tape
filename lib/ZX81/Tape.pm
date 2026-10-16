@@ -4,7 +4,7 @@ use Modern::Perl;
 use Path::Tiny;
 use ZX81::Tokenize qw( tokenize_basic );
 
-our $VERSION = '0.001';
+our $VERSION = '0.002';
 
 use Exporter qw(import);
 

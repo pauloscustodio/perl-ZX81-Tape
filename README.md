@@ -53,6 +53,11 @@ referenced as '@' NAME, e.g.
     @LOOP: PRINT "HELLO"
            GOTO @LOOP
 
+The address of the line can be referenced as '&' NAME, e.g.
+
+    @MCODE: REM \C9
+            PRINT USR &MCODE
+
 # SEE ALSO
 
 [ZX81](https://metacpan.org/pod/ZX81)

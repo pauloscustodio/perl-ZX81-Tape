@@ -442,7 +442,7 @@ sub list_p {
                 }
             }
             if ($has_binary_data) {
-                print $bas_fh "REM ";
+                print $bas_fh " REM ";
                 for ( my $i = 1 ; $i < $size - 1 ; $i++ ) {
                     printf $bas_fh "\\%02X", $peek->( $addr + 4 + $i );
                 }
@@ -710,10 +710,39 @@ sub compile {
         }
     }
 
-    # encode line into tape bytes
-    for my $line ( @{ $self->lines } ) {
-        my $bytes = tokenize_basic( $line->line_num . " " . $line->text );
-        $line->bytes($bytes);
+    # replace &label with line address
+    my %line_addr;
+    my $old_size = 0;
+    for ( my $pass = 1 ; $pass <= 2 ; $pass++ ) {
+        my $bin = '';
+        for my $line ( @{ $self->lines } ) {
+
+            # calculate the address of the line
+            if ( $line->label ne '' ) {
+                $line_addr{ $line->label } = 0x407D + length($bin);
+            }
+
+            # replace &label with line address
+            my $text = $line->line_num . " " . $line->text;
+            while ( $text =~ /\&([a-z_]\w+)/i ) {
+                my $label = $1;
+                if ( !exists $self->labels->{$label} ) {
+                    $line->error( "undefined label: " . $label );
+                }
+                my $addr = $line_addr{$label} // 0;
+                $text =~ s/\&$label/$addr/g;
+            }
+
+            my $line_bytes = tokenize_basic($text);
+            $line->bytes($line_bytes);
+            $bin .= $line_bytes;
+        }
+
+        my $new_size = length($bin);
+        if ( $old_size != $new_size ) {
+            $old_size = $new_size;
+            $pass     = 0;           # repeat if size changed
+        }
     }
 }
 
@@ -898,6 +927,11 @@ referenced as '@' NAME, e.g.
 
     @LOOP: PRINT "HELLO"
            GOTO @LOOP
+
+The address of the line can be referenced as '&' NAME, e.g.
+
+    @MCODE: REM \C9
+            PRINT USR &MCODE
 
 =head1 SEE ALSO
 

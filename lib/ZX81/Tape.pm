@@ -309,26 +309,26 @@ sub dump_p {
         }
         return $text;
     };
-	my $dump = sub {
-		my($addr, $size, $text) = @_;
-		
-		printf $dump_fh "%04X        %s\n", $addr, $text;
-		for (my $i = 0; $i < $size; ) {
-			my $bytes_dump = "";
-			my $text_dump = "";
-			my $num_dumpped = 0;
-			for (my $j = 0; $j < 8 && $i + $j < $size; $j++) {
-				my $byte = $peek->($addr+$i+$j);
-				$num_dumpped++;
-				$bytes_dump .= sprintf("%02X ", $byte);
-				$text_dump .= $peek_text->($addr+$i+$j, 1)." ";
-				last if $byte == 0x76;
-			}
-			printf $dump_fh "%04X        %-26s  %s\n", 
-					$addr+$i, $bytes_dump, $text_dump;
-			$i += $num_dumpped;
-		}
-	};
+    my $dump = sub {
+        my ( $addr, $size, $text ) = @_;
+
+        printf $dump_fh "%04X        %s\n", $addr, $text;
+        for ( my $i = 0 ; $i < $size ; ) {
+            my $bytes_dump  = "";
+            my $text_dump   = "";
+            my $num_dumpped = 0;
+            for ( my $j = 0 ; $j < 8 && $i + $j < $size ; $j++ ) {
+                my $byte = $peek->( $addr + $i + $j );
+                $num_dumpped++;
+                $bytes_dump .= sprintf( "%02X ", $byte );
+                $text_dump  .= $peek_text->( $addr + $i + $j, 1 ) . " ";
+                last if $byte == 0x76;
+            }
+            printf $dump_fh "%04X        %-26s  %s\n",
+              $addr + $i, $bytes_dump, $text_dump;
+            $i += $num_dumpped;
+        }
+    };
 
     my $prog   = $sysvars{PROG};
     my $d_file = $dpeek->( $sysvars{D_FILE} );
@@ -343,13 +343,15 @@ sub dump_p {
     }
     for ( my $addr = $sysvars{VERSN} ; $addr < $prog ; $addr++ ) {
         if ( $addr == $sysvars{PRBUFF} ) {
-			# printer buffer
-			$dump->($addr, 33, "PRBUFF");
+
+            # printer buffer
+            $dump->( $addr, 33, "PRBUFF" );
             $addr += 33 - 1;
         }
         elsif ( $addr == $sysvars{MEMBOT} ) {
-			# memory calculator area
-			$dump->($addr, 30, "MEMBOT");
+
+            # memory calculator area
+            $dump->( $addr, 30, "MEMBOT" );
             $addr += 30 - 1;
         }
         elsif ( exists $rev_sysvars{ $addr + 1 } ) {
@@ -371,28 +373,31 @@ sub dump_p {
     for ( my $addr = $prog ; $addr < $d_file ; ) {
         my $line_num = $dpeek_be->($addr);
         my $size     = $dpeek->( $addr + 2 );
-		$dump->($addr, 4+$size, 
-				"[$size] $line_num ".$peek_text->( $addr + 4, $size - 1 ));
+        $dump->(
+            $addr, 4 + $size,
+            "[$size] $line_num " . $peek_text->( $addr + 4, $size - 1 )
+        );
         print $dump_fh "\n";
-		# move to the next line (2 bytes for line number, 2 bytes for size)
-        $addr += $size + 4; 
+
+        # move to the next line (2 bytes for line number, 2 bytes for size)
+        $addr += $size + 4;
     }
 
     # show D_FILE section
     print $dump_fh "\nD_FILE Section:\n";
-	$dump->($d_file, $vars-$d_file, "D_FILE");
+    $dump->( $d_file, $vars - $d_file, "D_FILE" );
 
     # Show VARS section
     print $dump_fh "\nVARS Section:\n";
-	$dump->($vars, $e_line-$vars, "VARS");
+    $dump->( $vars, $e_line - $vars, "VARS" );
 }
 
 #------------------------------------------------------------------------------
 # list basic program
 #------------------------------------------------------------------------------
 sub list_p {
-	my($p_filename, $bas_filename) = @_;
-	
+    my ( $p_filename, $bas_filename ) = @_;
+
     my $bas_fh;
     if ( defined $bas_filename ) {
         open( $bas_fh, ">", $bas_filename )
@@ -418,85 +423,85 @@ sub list_p {
         my ($addr) = @_;
         return ( $mem[ $addr - 0x4009 ] << 8 ) | $mem[ $addr + 1 - 0x4009 ];
     };
-	
-	# dump BASIC program
-	my $prog = $sysvars{PROG};
-	my $d_file = $dpeek->($sysvars{D_FILE});
-	for (my $addr = $prog; $addr < $d_file; ) {
+
+    # dump BASIC program
+    my $prog   = $sysvars{PROG};
+    my $d_file = $dpeek->( $sysvars{D_FILE} );
+    for ( my $addr = $prog ; $addr < $d_file ; ) {
         my $line_num = $dpeek_be->($addr);
         my $size     = $dpeek->( $addr + 2 );
-		printf $bas_fh "%5d ", $line_num;
-		
-		# rem line with possible binary data
-		if ($peek->($addr+4) == 0xEA) {	# REM
-			my $has_binary_data = 0;
-			for (my $i = 1; $i < $size-1; $i++) {
-				if (($peek->($addr+4+$i) & 0x40) == 0x40) {
-					$has_binary_data = 1;
-					last;
-				}
-			}
-			if ($has_binary_data) {
-				print $bas_fh "REM ";
-				for (my $i = 1; $i < $size-1; $i++) {
-					printf $bas_fh "\\%02X", $peek->($addr+4+$i);
-				}
-				print $bas_fh "\n";
-			}
-			else {
-				print $bas_fh " REM ";
-				for (my $i = 1; $i < $size-1; $i++) {
-					my $byte = $peek->($addr+4+$i);
-					if (($byte & 0x40) == 0 && exists $zx81chars{$byte}) {
-						print $bas_fh $zx81chars{$byte};
-					}
-					else {
-						printf $bas_fh "\\%02X", $byte;
-					}
-				}
-				print $bas_fh "\n";
-			}
-			
-			$addr += 4+$size;
-			next;
-		}
-		
-		# BASIC text
-		my $in_quote = 0;
-		for (my $i = 0; $i < $size-1; $i++) {
-			my $byte = $peek->($addr+4+$i);
-			if ($byte == 0x0B) {
-				$in_quote = !$in_quote;
-			}
+        printf $bas_fh "%5d ", $line_num;
 
-			if ($byte == 0xC0) {	# double quote
-				print $bas_fh "\\\"";
-			}
-			elsif ($byte == 0x7E) {	# number
-				$i += 5;
-			}
-			elsif ($in_quote && ($byte & 0x40) == 0x40) {
-				printf $bas_fh "\\%02X", $byte;
-			}
-			elsif (!$in_quote && $byte == 0) {
-				printf $bas_fh "\\%02X", $byte;	# space
-			}
-			elsif (exists $zx81chars{$byte}) {
-				my $code = $zx81chars{$byte};
-				if ($code =~ /^\w\w/) {
-					$code = " $code ";
-				}
-				printf $bas_fh $code;
-			}
-			else {
-				printf $bas_fh "\\%02X", $byte;
-			}
-		}
-		print $bas_fh "\n";
+        # rem line with possible binary data
+        if ( $peek->( $addr + 4 ) == 0xEA ) {    # REM
+            my $has_binary_data = 0;
+            for ( my $i = 1 ; $i < $size - 1 ; $i++ ) {
+                if ( ( $peek->( $addr + 4 + $i ) & 0x40 ) == 0x40 ) {
+                    $has_binary_data = 1;
+                    last;
+                }
+            }
+            if ($has_binary_data) {
+                print $bas_fh "REM ";
+                for ( my $i = 1 ; $i < $size - 1 ; $i++ ) {
+                    printf $bas_fh "\\%02X", $peek->( $addr + 4 + $i );
+                }
+                print $bas_fh "\n";
+            }
+            else {
+                print $bas_fh " REM ";
+                for ( my $i = 1 ; $i < $size - 1 ; $i++ ) {
+                    my $byte = $peek->( $addr + 4 + $i );
+                    if ( ( $byte & 0x40 ) == 0 && exists $zx81chars{$byte} ) {
+                        print $bas_fh $zx81chars{$byte};
+                    }
+                    else {
+                        printf $bas_fh "\\%02X", $byte;
+                    }
+                }
+                print $bas_fh "\n";
+            }
 
-		$addr += 4+$size;
-		next;
-	}
+            $addr += 4 + $size;
+            next;
+        }
+
+        # BASIC text
+        my $in_quote = 0;
+        for ( my $i = 0 ; $i < $size - 1 ; $i++ ) {
+            my $byte = $peek->( $addr + 4 + $i );
+            if ( $byte == 0x0B ) {
+                $in_quote = !$in_quote;
+            }
+
+            if ( $byte == 0xC0 ) {    # double quote
+                print $bas_fh "\\\"";
+            }
+            elsif ( $byte == 0x7E ) {    # number
+                $i += 5;
+            }
+            elsif ( $in_quote && ( $byte & 0x40 ) == 0x40 ) {
+                printf $bas_fh "\\%02X", $byte;
+            }
+            elsif ( !$in_quote && $byte == 0 ) {
+                printf $bas_fh "\\%02X", $byte;    # space
+            }
+            elsif ( exists $zx81chars{$byte} ) {
+                my $code = $zx81chars{$byte};
+                if ( $code =~ /^\w\w/ ) {
+                    $code = " $code ";
+                }
+                printf $bas_fh $code;
+            }
+            else {
+                printf $bas_fh "\\%02X", $byte;
+            }
+        }
+        print $bas_fh "\n";
+
+        $addr += 4 + $size;
+        next;
+    }
 }
 
 #------------------------------------------------------------------------------
@@ -554,22 +559,22 @@ sub parse_file {
     my ( $self, $filename ) = @_;
 
     # read lines from file
-    my @lines = path($filename)->lines({chomp => 1});
+    my @lines = path($filename)->lines( { chomp => 1 } );
 
     # add source line numbers
-    for my $i (0..$#lines) {
+    for my $i ( 0 .. $#lines ) {
         my $line = ZX81::Tape::Line->new();
         $line->src_file($filename);
-        $line->src_line_num($i+1);
-        $line->text($lines[$i]);
+        $line->src_line_num( $i + 1 );
+        $line->text( $lines[$i] );
         $lines[$i] = $line;
     }
 
     # join continuation lines
-    for (my $i=0; $i < @lines; $i++) {
-        while ($lines[$i]->{text} =~ s/\\$// && $i+1 < @lines) {
-            $lines[$i]->text($lines[$i]->text . $lines[$i+1]->text);
-            splice(@lines, $i+1, 1);
+    for ( my $i = 0 ; $i < @lines ; $i++ ) {
+        while ( $lines[$i]->{text} =~ s/\\$// && $i + 1 < @lines ) {
+            $lines[$i]->text( $lines[$i]->text . $lines[ $i + 1 ]->text );
+            splice( @lines, $i + 1, 1 );
         }
     }
 
@@ -579,32 +584,34 @@ sub parse_file {
     }
 
     # merge lines with only label or line number with next line
-    for (my $i=0; $i < @lines-1; $i++) {
-        my $this=$lines[$i];
-        my $next=$lines[$i+1];
-        if ($this->text =~ /^\s*$/) {
-            my $num_labels = 
-                ($this->label ne '' ? 1 : 0) + 
-                ($next->label ne '' ? 1 : 0);
-            my $num_line_nums = 
-                ($this->line_num >= 0 ? 1 : 0) + 
-                ($next->line_num >= 0 ? 1 : 0);
-            if ($num_labels <= 1 && $num_line_nums <= 1) {
+    for ( my $i = 0 ; $i < @lines - 1 ; $i++ ) {
+        my $this = $lines[$i];
+        my $next = $lines[ $i + 1 ];
+        if ( $this->text =~ /^\s*$/ ) {
+            my $num_labels =
+              ( $this->label ne '' ? 1 : 0 ) + ( $next->label ne '' ? 1 : 0 );
+            my $num_line_nums =
+              ( $this->line_num >= 0 ? 1 : 0 ) +
+              ( $next->line_num >= 0 ? 1 : 0 );
+            if ( $num_labels <= 1 && $num_line_nums <= 1 ) {
                 $this->label( $next->label )       if $next->label ne '';
                 $this->line_num( $next->line_num ) if $next->line_num >= 0;
                 $this->text( $next->text );
-                splice( @lines, $i+1, 1 );
+                splice( @lines, $i + 1, 1 );
                 $i--;
             }
         }
     }
 
     # parse lines
-    for (my $i=0; $i < @lines; $i++) {
+    for ( my $i = 0 ; $i < @lines ; $i++ ) {
         my $line = $lines[$i];
 
         # skip blank lines
-        if ($line->text =~ /^\s*$/ && $line->label eq '' && $line->line_num < 0) {
+        if (   $line->text =~ /^\s*$/
+            && $line->label eq ''
+            && $line->line_num < 0 )
+        {
             next;
         }
 
@@ -617,17 +624,17 @@ sub parse_file {
         if ( $line->line_num >= 0 ) {
             if ( $line->line_num <= $self->last_line_num ) {
                 $line->error( "BASIC lines out of order: "
-                        . $line->line_num
-                        . " after "
-                        . $self->last_line_num );
+                      . $line->line_num
+                      . " after "
+                      . $self->last_line_num );
             }
             $self->last_line_num( $line->line_num );
         }
         else {
             my $new_line_num =
                 $self->last_line_num < 0
-                ? $self->increment
-                : $self->last_line_num + $self->increment;
+              ? $self->increment
+              : $self->last_line_num + $self->increment;
             $line->line_num($new_line_num);
             $self->last_line_num($new_line_num);
         }
@@ -666,7 +673,9 @@ sub parse_label_line_num {
 
     my $got_any;
     while (1) {
-        if ( $line->label eq '' && $line->{text} =~ s/^\s*\@([a-z_]\w+)\s*:\s*//i ) {
+        if (   $line->label eq ''
+            && $line->{text} =~ s/^\s*\@([a-z_]\w+)\s*:\s*//i )
+        {
             $line->label($1);
             $got_any = 1;
         }
@@ -683,18 +692,18 @@ sub parse_label_line_num {
     return $got_any;
 }
 
-sub compile { 
-    my($self) = @_;
+sub compile {
+    my ($self) = @_;
 
     # remove empty lines
-    @{ $self->lines } = grep { $_->text !~ /^\s*$/} @{ $self->lines };
-    
+    @{ $self->lines } = grep { $_->text !~ /^\s*$/ } @{ $self->lines };
+
     # replace all labels with line numbers
-    for my $line (@{ $self->lines }) {
-        while ($line->{text} =~ /\@([a-z_]\w+)/) {
+    for my $line ( @{ $self->lines } ) {
+        while ( $line->{text} =~ /\@([a-z_]\w+)/ ) {
             my $label = $1;
-            if (!exists $self->labels->{$label}) {
-                $line->error("undefined label: ".$label);
+            if ( !exists $self->labels->{$label} ) {
+                $line->error( "undefined label: " . $label );
             }
             my $line_num = $self->labels->{$label};
             $line->{text} =~ s/\@$label/$line_num/g;
@@ -702,7 +711,7 @@ sub compile {
     }
 
     # encode line into tape bytes
-    for my $line (@{ $self->lines }) {
+    for my $line ( @{ $self->lines } ) {
         my $bytes = tokenize_basic( $line->line_num . " " . $line->text );
         $line->bytes($bytes);
     }

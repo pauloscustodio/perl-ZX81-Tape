@@ -7,6 +7,7 @@ use Text::Diff;
 BEGIN { use_ok 'ZX81::Tape', 'make_p', 'dump_p', 'list_p' }
 
 for my $input_bas_file (path("t/input")->children(qr/\.bas$/)) {
+	note "input file: $input_bas_file";
 	my $input_basename = $input_bas_file->basename(".bas");
     my $exp_p_file = path("t/expected")->child("$input_basename.p");
 	my $exp_dump_file = path("t/expected")->child("$input_basename.txt");

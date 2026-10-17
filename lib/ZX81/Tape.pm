@@ -536,6 +536,7 @@ sub list_p {
 use Object::Tiny::RW qw(
   lines
   last_line_num increment
+  labels
 );
 
 sub new {
@@ -544,6 +545,7 @@ sub new {
         lines         => [],
         last_line_num => -1,
         increment     => 10,
+        labels        => {},
     }, $class;
     return $self;
 }
@@ -551,90 +553,92 @@ sub new {
 sub parse_file {
     my ( $self, $filename ) = @_;
 
-    open( my $fh, "<", $filename ) or die "error: open $filename: $!\n";
-    my $src_line_num = 0;
-    my @unget_lines;
-    my $ungetline = sub {
-        my($line) = @_;
-        unshift @unget_lines, $line;
-    };
-    my $getline      = sub {
-        if (@unget_lines) {
-            return shift @unget_lines;
-        }
-        my $text = <$fh>;
-        return undef unless defined $text;
-        chomp $text;
-        $src_line_num++;
-        return $text;
-    };
+    # read lines from file
+    my @lines = path($filename)->lines({chomp => 1});
 
-LINE:
-    while ( defined( my $text = $getline->() ) ) {
-
-        # join continuation lines
-        while ( $text =~ s/\\$// && defined( my $cont = $getline->() ) ) {
-            $text .= $cont;
-        }
-
-        # skip blank lines
-        if ( $text =~ /^\s*$/ ) {
-            next;
-        }
-
-        # create line
+    # add source line numbers
+    for my $i (0..$#lines) {
         my $line = ZX81::Tape::Line->new();
         $line->src_file($filename);
-        $line->src_line_num($src_line_num);
-        $line->text($text);
+        $line->src_line_num($i+1);
+        $line->text($lines[$i]);
+        $lines[$i] = $line;
+    }
+
+    # join continuation lines
+    for (my $i=0; $i < @lines; $i++) {
+        while ($lines[$i]->{text} =~ s/\\$// && $i+1 < @lines) {
+            $lines[$i]->text($lines[$i]->text . $lines[$i+1]->text);
+            splice(@lines, $i+1, 1);
+        }
+    }
+
+    # parse labels and line numbers
+    for my $line (@lines) {
+        $self->parse_label_line_num($line);
+    }
+
+    # merge lines with only label or line number with next line
+    for (my $i=0; $i < @lines-1; $i++) {
+        my $this=$lines[$i];
+        my $next=$lines[$i+1];
+        if ($this->text =~ /^\s*$/) {
+            my $num_labels = 
+                ($this->label ne '' ? 1 : 0) + 
+                ($next->label ne '' ? 1 : 0);
+            my $num_line_nums = 
+                ($this->line_num >= 0 ? 1 : 0) + 
+                ($next->line_num >= 0 ? 1 : 0);
+            if ($num_labels <= 1 && $num_line_nums <= 1) {
+                $this->label( $next->label )       if $next->label ne '';
+                $this->line_num( $next->line_num ) if $next->line_num >= 0;
+                $this->text( $next->text );
+                splice( @lines, $i+1, 1 );
+                $i--;
+            }
+        }
+    }
+
+    # parse lines
+    for (my $i=0; $i < @lines; $i++) {
+        my $line = $lines[$i];
+
+        # skip blank lines
+        if ($line->text =~ /^\s*$/ && $line->label eq '' && $line->line_num < 0) {
+            next;
+        }
 
         # handle pragmas
         if ( $self->parse_pragma($line) ) {
             next;
         }
 
-        # parse label and line number
-        while ( $self->parse_label_line_num($line) ) {
-
-            # if text is now empty, read next line
-            if ( $line->text =~ /^\s*$/ ) {
-                $text = $getline->();
-                while ( $text =~ s/\\$// && defined( my $cont = $getline->() ) )
-                {
-                    $text .= $cont;
-                }
-                if (!defined $text || $text =~ /^\s*$/) {
-                    next LINE;   # ignore empty line
-                }
-
-                # if new line has label or line number, unget it
-                my $dummy_line = ZX81::Tape::Line->new();
-                $dummy_line->text($text);
-                if ( $self->parse_label_line_num($dummy_line) ) {
-                    $ungetline->($text);
-                    next LINE;  # ignore current empty line, reread next line
-                }
-                $line->text($text);
+        # number the line
+        if ( $line->line_num >= 0 ) {
+            if ( $line->line_num <= $self->last_line_num ) {
+                $line->error( "BASIC lines out of order: "
+                        . $line->line_num
+                        . " after "
+                        . $self->last_line_num );
             }
+            $self->last_line_num( $line->line_num );
+        }
+        else {
+            my $new_line_num =
+                $self->last_line_num < 0
+                ? $self->increment
+                : $self->last_line_num + $self->increment;
+            $line->line_num($new_line_num);
+            $self->last_line_num($new_line_num);
         }
 
-		# number the line
-		if ($line->line_num >= 0) {
-            if ($line->line_num <= $self->last_line_num) {
-                $line->error("BASIC lines out of order: ".$line->line_num." after ".$self->last_line_num);
+        # set the label if present
+        if ( $line->label ne '' ) {
+            if ( exists $self->labels->{ $line->label } ) {
+                $line->error( "duplicate label: " . $line->label );
             }
-			$self->last_line_num($line->line_num);
-		}
-		else {
-			my $new_line_num = $self->last_line_num < 0 ? 
-				$self->increment : $self->last_line_num + $self->increment;
-			$line->line_num($new_line_num);
-			$self->last_line_num($new_line_num);
-		}
-		
-        # encode line into tape bytes
-        my $bytes = tokenize_basic( $line->line_num." ".$line->text );
-        $line->bytes($bytes);
+            $self->labels->{ $line->label } = $line->line_num;
+        }
 
         # add line to tape
         push @{ $self->lines }, $line;
@@ -679,7 +683,30 @@ sub parse_label_line_num {
     return $got_any;
 }
 
-sub compile { }
+sub compile { 
+    my($self) = @_;
+
+    # remove empty lines
+    @{ $self->lines } = grep { $_->text !~ /^\s*$/} @{ $self->lines };
+    
+    # replace all labels with line numbers
+    for my $line (@{ $self->lines }) {
+        while ($line->{text} =~ /\@([a-z_]\w+)/) {
+            my $label = $1;
+            if (!exists $self->labels->{$label}) {
+                $line->error("undefined label: ".$label);
+            }
+            my $line_num = $self->labels->{$label};
+            $line->{text} =~ s/\@$label/$line_num/g;
+        }
+    }
+
+    # encode line into tape bytes
+    for my $line (@{ $self->lines }) {
+        my $bytes = tokenize_basic( $line->line_num . " " . $line->text );
+        $line->bytes($bytes);
+    }
+}
 
 sub add_basic_line {
     my ( $self, $text ) = @_;

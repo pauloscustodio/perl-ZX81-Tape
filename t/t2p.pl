@@ -12,8 +12,14 @@ my $p_file = $opts{o} ? $opts{o} : ($bas_file =~ s/\.\w+$/.p/r);
 -f $bas_file or die "file not found: $bas_file\n";
 $bas_file eq $p_file and die "output file same as input file\n";
 
+# replace @label: 10 PRINT by 10 @label: PRINT
+my $source = path($bas_file)->slurp;
+$source =~ s/^(\s*\@\w+:)(\s*\d+\s*)/$2 $1/mg;
+path("$bas_file.2")->spew($source);
+
 # call t2p
-system("t2p -o $p_file $bas_file")==0 or die "t2p failed\n";
+system("t2p -o $p_file $bas_file.2")==0 or die "t2p failed\n";
+unlink "$bas_file.2";
 
 # patch the result file
 my @bytes = map {ord} split //, path($p_file)->slurp_raw;

@@ -48,9 +48,11 @@ BASIC Program:
 407D        [9] 10 PRINT "HELLO"
 407D        00 0A 09 00 F5 0B 2D 2A       \0A \09   PRINT  " H E 
 4085        31 31 34 0B 76              L L O " \76 
+
 408A        [10] 20 GOTO 10\7E\84\20\00\00\00
-408A        00 14 0A 00 EC 1D 1C 7E       = \0A   GOTO  1 0 \7E\84\20\00\00\00 
+408A        00 14 0A 00 EC 1D 1C 7E       = \0A   GOTO  1 0 \7E 
 4092        84 20 00 00 00 76           \84 4       \76 
+
 
 D_FILE Section:
 4098        D_FILE

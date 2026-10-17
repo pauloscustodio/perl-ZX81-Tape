@@ -48,10 +48,12 @@ BASIC Program:
 407D        [9] 10 PRINT "HELLO"
 407D        00 0A 09 00 F5 0B 2D 2A       \0A \09   PRINT  " H E 
 4085        31 31 34 0B 76              L L O " \76 
+
 408A        [15] 20 PRINT "HELLO WORLD"
 408A        00 14 0F 00 F5 0B 2D 2A       = ?   PRINT  " H E 
 4092        31 31 34 00 3C 34 37 31     L L O   W O R L 
 409A        29 0B 76                    D " \76 
+
 
 D_FILE Section:
 409D        D_FILE

@@ -291,7 +291,7 @@ sub dump_p {
             if ( $byte == 0x7E ) {
 
                 # floating point number
-                for ( my $j = 0 ; $j < 6 ; $j++ ) {
+                for ( my $j = 0 ; $j < 6 && $i + $j < $size ; $j++ ) {
                     $text .= sprintf( "\\%02X", $peek->( $addr + $i + $j ) );
                 }
                 $i += 6 - 1;
@@ -373,6 +373,7 @@ sub dump_p {
         my $size     = $dpeek->( $addr + 2 );
 		$dump->($addr, 4+$size, 
 				"[$size] $line_num ".$peek_text->( $addr + 4, $size - 1 ));
+        print $dump_fh "\n";
 		# move to the next line (2 bytes for line number, 2 bytes for size)
         $addr += $size + 4; 
     }
@@ -552,7 +553,15 @@ sub parse_file {
 
     open( my $fh, "<", $filename ) or die "error: open $filename: $!\n";
     my $src_line_num = 0;
+    my @unget_lines;
+    my $ungetline = sub {
+        my($line) = @_;
+        unshift @unget_lines, $line;
+    };
     my $getline      = sub {
+        if (@unget_lines) {
+            return shift @unget_lines;
+        }
         my $text = <$fh>;
         return undef unless defined $text;
         chomp $text;
@@ -560,6 +569,7 @@ sub parse_file {
         return $text;
     };
 
+LINE:
     while ( defined( my $text = $getline->() ) ) {
 
         # join continuation lines
@@ -584,7 +594,7 @@ sub parse_file {
         }
 
         # parse label and line number
-        if ( $self->parse_label_line_num($line) ) {
+        while ( $self->parse_label_line_num($line) ) {
 
             # if text is now empty, read next line
             if ( $line->text =~ /^\s*$/ ) {
@@ -593,12 +603,37 @@ sub parse_file {
                 {
                     $text .= $cont;
                 }
+                if (!defined $text || $text =~ /^\s*$/) {
+                    next LINE;   # ignore empty line
+                }
+
+                # if new line has label or line number, unget it
+                my $dummy_line = ZX81::Tape::Line->new();
+                $dummy_line->text($text);
+                if ( $self->parse_label_line_num($dummy_line) ) {
+                    $ungetline->($text);
+                    next LINE;  # ignore current empty line, reread next line
+                }
+                $line->text($text);
             }
-            $line->text($text);
         }
 
+		# number the line
+		if ($line->line_num >= 0) {
+            if ($line->line_num <= $self->last_line_num) {
+                $line->error("BASIC lines out of order: ".$line->line_num." after ".$self->last_line_num);
+            }
+			$self->last_line_num($line->line_num);
+		}
+		else {
+			my $new_line_num = $self->last_line_num < 0 ? 
+				$self->increment : $self->last_line_num + $self->increment;
+			$line->line_num($new_line_num);
+			$self->last_line_num($new_line_num);
+		}
+		
         # encode line into tape bytes
-        my $bytes = tokenize_basic( $line->text );
+        my $bytes = tokenize_basic( $line->line_num." ".$line->text );
         $line->bytes($bytes);
 
         # add line to tape
@@ -625,17 +660,15 @@ sub parse_pragma {
 sub parse_label_line_num {
     my ( $self, $line ) = @_;
 
-    my $got_label;
-    my $got_line_num;
     my $got_any;
     while (1) {
-        if ( !$got_label && $line->{text} =~ s/^\s*\@([a-z_]\w+)\s*:\s*//i ) {
+        if ( $line->label eq '' && $line->{text} =~ s/^\s*\@([a-z_]\w+)\s*:\s*//i ) {
             $line->label($1);
-            $got_label = $got_any = 1;
+            $got_any = 1;
         }
-        elsif ( !$got_line_num && $line->{text} =~ s/^\s*(\d+)\s*//i ) {
+        elsif ( $line->line_num < 0 && $line->{text} =~ s/^\s*(\d+)\s*//i ) {
             $line->line_num($1);
-            $got_line_num = $got_any = 1;
+            $got_any = 1;
         }
         else {
             last;
@@ -813,6 +846,22 @@ standard output or a specified file with the given file name.
 
 Reads the given binary tape image file and generates a .bas text that 
 can be compiled back to the same .p result.
+
+=head1 BASIC SYNTAX
+
+All ZX81 BASIC keywords are accepted. The escape sequences supported by 
+L<https://freestuff.grok.co.uk/zxtext2p/index.html> are also accepted.
+
+Line numbers are optional and the source program is numbered before conversion
+to the tape format. The start line number is 10 by default and the increment
+between consecutive lines is also 10 by default. A line with a line number
+resets the numbering from there on. Line numbers from 0 to 9999 are accepted.
+
+Labels can be written before the BASIC statement as '@' NAME ':', and can be
+referenced as '@' NAME, e.g.
+
+    @LOOP: PRINT "HELLO"
+           GOTO @LOOP
 
 =head1 SEE ALSO
 

@@ -47,10 +47,12 @@ System Variables:
 BASIC Program:
 407D        [14] 10 LET  X = 0\7E\00\00\00\00\00
 407D        00 0A 0E 00 F1 00 3D 00       \0A :   LET    X   
-4085        14 00 1C 7E 00 00 00 00     =   0 \7E\00\00\00\00\00         
+4085        14 00 1C 7E 00 00 00 00     =   0 \7E         
 408D        00 76                         \76 
+
 408F        [3] 20 PRINT X
 408F        00 14 03 00 F5 3D 76          = \03   PRINT  X \76 
+
 
 D_FILE Section:
 4096        D_FILE

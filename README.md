@@ -37,6 +37,22 @@ standard output or a specified file with the given file name.
 Reads the given binary tape image file and generates a .bas text that 
 can be compiled back to the same .p result.
 
+# BASIC SYNTAX
+
+All ZX81 BASIC keywords are accepted. The escape sequences supported by 
+[https://freestuff.grok.co.uk/zxtext2p/index.html](https://freestuff.grok.co.uk/zxtext2p/index.html) are also accepted.
+
+Line numbers are optional and the source program is numbered before conversion
+to the tape format. The start line number is 10 by default and the increment
+between consecutive lines is also 10 by default. A line with a line number
+resets the numbering from there on. Line numbers from 0 to 9999 are accepted.
+
+Labels can be written before the BASIC statement as '@' NAME ':', and can be
+referenced as '@' NAME, e.g.
+
+    @LOOP: PRINT "HELLO"
+           GOTO @LOOP
+
 # SEE ALSO
 
 [ZX81](https://metacpan.org/pod/ZX81)

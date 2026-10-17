@@ -38,5 +38,18 @@ $bytes[0x401B-0x4009] = ($stkbot >> 8) & 0xFF;
 $bytes[0x401C-0x4009] = $stkbot & 0xFF;
 $bytes[0x401D-0x4009] = ($stkbot >> 8) & 0xFF;
 
+# make E_PPC the first line number in the program
+my $d_file = $bytes[0x400C-0x4009] | ($bytes[0x400D-0x4009] << 8);
+if ($d_file == 0x407D) {
+    # no lines in the program, make E_PPC = 0
+    $bytes[0x400A-0x4009] = 0;
+    $bytes[0x400B-0x4009] = 0;
+}
+else {
+    my $line_num = ($bytes[0x407D-0x4009] << 8) | $bytes[0x407E-0x4009];
+    $bytes[0x400A-0x4009] = $line_num & 0xFF;
+    $bytes[0x400B-0x4009] = ($line_num >> 8) & 0xFF;
+}
+
 # write the file
 path($p_file)->spew_raw(join '', map {chr} @bytes);

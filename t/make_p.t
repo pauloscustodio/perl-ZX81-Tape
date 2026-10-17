@@ -14,7 +14,7 @@ for my $input_bas_file (path("t/input")->children(qr/\.bas$/)) {
 	
 	# make .p file from .bas and compare to expected
 	make_p($input_bas_file, "$input_basename.p");
-	compare_p("$input_basename.p", $exp_p_file);
+	compare_p($exp_p_file, "$input_basename.p");
 	
 	if (Test::More->builder->is_passing) {
 		unlink "$input_basename.p";
@@ -22,7 +22,7 @@ for my $input_bas_file (path("t/input")->children(qr/\.bas$/)) {
 	
 	# make dump file from .p and compare to expected
 	dump_p($exp_p_file, "$input_basename.txt");
-	compare_text("$input_basename.txt", $exp_dump_file);
+	compare_text($exp_dump_file, "$input_basename.txt");
 	
 	if (Test::More->builder->is_passing) {
 		unlink "$input_basename.txt";
@@ -30,7 +30,7 @@ for my $input_bas_file (path("t/input")->children(qr/\.bas$/)) {
 	
 	# make list file from .p and compare to expected
 	list_p($exp_p_file, "$input_basename.bas");
-	compare_text("$input_basename.bas", $exp_list_file);
+	compare_text($exp_list_file, "$input_basename.bas");
 	
 	if (Test::More->builder->is_passing) {
 		unlink "$input_basename.bas";
@@ -39,7 +39,7 @@ for my $input_bas_file (path("t/input")->children(qr/\.bas$/)) {
 	# round-trip
 	list_p($exp_p_file, "$input_basename.2.bas");
 	make_p("$input_basename.2.bas", "$input_basename.2.p");
-	compare_p("$input_basename.2.p", $exp_p_file);
+	compare_p($exp_p_file, "$input_basename.2.p");
 	
 	if (Test::More->builder->is_passing) {
 		unlink "$input_basename.2.bas", "$input_basename.2.p";
@@ -49,35 +49,35 @@ for my $input_bas_file (path("t/input")->children(qr/\.bas$/)) {
 done_testing;
 
 sub compare_p {
-	my($got_p, $exp_p) = @_;
+	my($exp_p, $got_p) = @_;
 	
-	my $got_bytes = path($got_p)->slurp_raw; 
 	my $exp_bytes = path($exp_p)->slurp_raw;
+	my $got_bytes = path($got_p)->slurp_raw; 
 
-	eq_or_dump_diff($got_bytes, $exp_bytes, { address => 0x4009 }, 
-					"diff $got_p $exp_p");
-	if ($got_bytes ne $exp_bytes) {
+	eq_or_dump_diff($exp_bytes, $got_bytes, { address => 0x4009 }, 
+					"diff $exp_p $got_p");
+	if ($exp_bytes ne $got_bytes) {
 		if ($ENV{DEVELOPPER}) {
-			dump_p($got_p, "$got_p.txt");
 			dump_p($exp_p, "$exp_p.txt");
-			system "start \"\" WinMergeU.exe $got_p.txt $exp_p.txt";
+			dump_p($got_p, "$got_p.txt");
+			system "start \"\" WinMergeU.exe $exp_p.txt $got_p.txt";
 		}
 	}
 
 	if (Test::More->builder->is_passing) {
-		unlink "$got_p.txt", "$exp_p.txt";
+		unlink "$exp_p.txt", "$got_p.txt";
 	}
 }
 
 sub compare_text {
-	my($got_txt, $exp_txt) = @_;
+	my($exp_txt, $got_txt) = @_;
 	
-	my $diff = diff("$got_txt", "$exp_txt");
-	ok $diff eq '', "diff $got_txt $exp_txt";
+	my $diff = diff("$exp_txt", "$got_txt");
+	ok $diff eq '', "diff $exp_txt $got_txt";
 	if ($diff ne '') {
 		warn $diff;
-		if ($ENV{DEVELOPPER}) {
-            system "start \"\" WinMergeU.exe $got_txt $exp_txt";
+		if ($ENV{DEVELOPER}) {
+            system "start \"\" WinMergeU.exe $exp_txt $got_txt";
 		}
 	}
 }

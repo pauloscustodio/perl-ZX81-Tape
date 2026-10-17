@@ -1,0 +1,4 @@
+#AUTOSTART=1
+
+   10  PRINT "HELLO"
+   20  GOTO 10

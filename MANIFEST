@@ -8,6 +8,9 @@ Makefile.PL
 MANIFEST			This list of files
 MANIFEST.SKIP
 README.md
+t/expected/autostart.bas
+t/expected/autostart.p
+t/expected/autostart.txt
 t/expected/basic_escape.bas
 t/expected/basic_escape.p
 t/expected/basic_escape.txt
@@ -86,6 +89,7 @@ t/expected/rem_tokens.txt
 t/expected/spaces.bas
 t/expected/spaces.p
 t/expected/spaces.txt
+t/input/autostart.bas
 t/input/basic_escape.bas
 t/input/cont_line.bas
 t/input/empty.bas

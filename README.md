@@ -47,6 +47,8 @@ to the tape format. The start line number is 10 by default and the increment
 between consecutive lines is also 10 by default. A line with a line number
 resets the numbering from there on. Line numbers from 0 to 9999 are accepted.
 
+## LABELS
+
 Labels can be written before the BASIC statement as '@' NAME ':', and can be
 referenced as '@' NAME, e.g.
 
@@ -57,6 +59,14 @@ The address of the line can be referenced as '&' NAME, e.g.
 
     @MCODE: REM \C9
             PRINT USR &MCODE
+
+## PRAGMAS
+
+### #AUTOSTART
+
+    #AUTOSTART=[0|1]
+
+If set to 1, the BASIC program will start automatically when the tape is loaded.
 
 # SEE ALSO
 

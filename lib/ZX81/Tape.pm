@@ -424,9 +424,21 @@ sub list_p {
         return ( $mem[ $addr - 0x4009 ] << 8 ) | $mem[ $addr + 1 - 0x4009 ];
     };
 
+    # dump pragmas
+    my $need_newline = 0;
+    my $d_file       = $dpeek->( $sysvars{D_FILE} );
+    my $nxtlin       = $dpeek->( $sysvars{NXTLIN} );
+    if ( $nxtlin < $d_file ) {
+        print $bas_fh "#AUTOSTART=1\n";
+        $need_newline = 1;
+    }
+
+    if ($need_newline) {
+        print $bas_fh "\n";
+    }
+
     # dump BASIC program
-    my $prog   = $sysvars{PROG};
-    my $d_file = $dpeek->( $sysvars{D_FILE} );
+    my $prog = $sysvars{PROG};
     for ( my $addr = $prog ; $addr < $d_file ; ) {
         my $line_num = $dpeek_be->($addr);
         my $size     = $dpeek->( $addr + 2 );
@@ -540,8 +552,10 @@ sub list_p {
 #------------------------------------------------------------------------------
 use Object::Tiny::RW qw(
   lines
-  last_line_num increment
+  last_line_num
   labels
+  autostart
+  increment
 );
 
 sub new {
@@ -549,8 +563,9 @@ sub new {
     my $self = bless {
         lines         => [],
         last_line_num => -1,
-        increment     => 10,
         labels        => {},
+        autostart     => 0,
+        increment     => 10,
     }, $class;
     return $self;
 }
@@ -639,6 +654,11 @@ sub parse_file {
             $self->last_line_num($new_line_num);
         }
 
+        if ( $line->line_num > 9999 ) {
+            $line->error(
+                "BASIC line number exceeds 9999: " . $line->line_num );
+        }
+
         # set the label if present
         if ( $line->label ne '' ) {
             if ( exists $self->labels->{ $line->label } ) {
@@ -655,6 +675,10 @@ sub parse_file {
 sub parse_pragma {
     my ( $self, $line ) = @_;
 
+    if ( $line->text =~ /^\s*\#\s*AUTOSTART\s*=\s*(\d+)/ ) {
+        $self->autostart($1);
+        return 1;
+    }
     if ( $line->text =~ /^\s*\#\s*INCREMENT\s*=\s*(\d+)/ ) {
         $self->increment($1);
         return 1;
@@ -746,58 +770,6 @@ sub compile {
     }
 }
 
-sub add_basic_line {
-    my ( $self, $text ) = @_;
-
-    if ( $text =~ /^\s*\#\s*INCREMENT\s*=\s*(\d+)/ ) {
-        $self->increment($1);
-    }
-    elsif ( $text =~ /^\s*\#/ ) {
-
-        # comment
-    }
-    elsif ( $text =~ /^\s*$/ ) {
-
-        # blank line
-    }
-    else {
-        my $line = ZX81::Tape::Line->new();
-
-        # parse label and line number
-        $text = $self->parse_label_line_num( $text, $line );
-
-        # assign line number
-        if ( $line->line_num < 0 ) {
-            my $new_line_num = $self->last_line_num + $self->increment;
-            $line->line_num($new_line_num);
-            $self->last_line_num($new_line_num);
-        }
-        elsif ( $line->line_num <= $self->last_line_num ) {
-            die "BASIC lines out of order: ",
-              $line->line_num, " after ", $self->last_line_num;
-        }
-        else {
-            $self->last_line_num( $line->line_num );
-        }
-
-        # tokenize text
-        my $bytes = tokenize_basic( $line->line_num . " " . $text );
-        $line->text($text);
-        $line->bytes($bytes);
-
-        # append to program
-        push @{ $self->basic }, $line;
-    }
-}
-
-sub add_basic {
-    my ( $self, $basic ) = @_;
-    $basic =~ s/\\\n/ /g;    # join continuation lines
-    for my $text ( split( /\n/, $basic ) ) {
-        $self->add_basic_line($text);
-    }
-}
-
 sub as_bytes {
     my ($self) = @_;
 
@@ -806,7 +778,7 @@ sub as_bytes {
     for my $line ( @{ $self->lines } ) {
         $prog .= $line->bytes;
     }
-    my $prog_start = 0x407D;
+    my $prog_start = $sysvars{PROG};
     my $e_ppc      = $prog eq '' ? 0 : unpack( "n", substr( $prog, 0, 2 ) );
 
     # Create an empty display file
@@ -820,6 +792,9 @@ sub as_bytes {
     my $vars       = pack( "C", 0x80 );
     my $vars_start = $dfile_start + length($dfile);
     my $mem_end    = $vars_start + length($vars);
+
+    # define autostart
+    my $nxtlin = $self->autostart ? $prog_start : $dfile_start;
 
     # Create the system variables
     my $bytes = '';
@@ -842,7 +817,7 @@ sub as_bytes {
     $bytes .= pack( "v",            0xFFFF );              # LAST_K
     $bytes .= pack( "C",            0x0F );                # DEBOUNCE
     $bytes .= pack( "C",            55 );                  # MARGIN
-    $bytes .= pack( "v",            $dfile_start );        # NXTLIN
+    $bytes .= pack( "v",            $nxtlin );             # NXTLIN
     $bytes .= pack( "v",            0 );                   # OLDPPC
     $bytes .= pack( "C",            0 );                   # FLAGX
     $bytes .= pack( "v",            0 );                   # STRLEN
@@ -922,6 +897,8 @@ to the tape format. The start line number is 10 by default and the increment
 between consecutive lines is also 10 by default. A line with a line number
 resets the numbering from there on. Line numbers from 0 to 9999 are accepted.
 
+=head2 LABELS
+
 Labels can be written before the BASIC statement as '@' NAME ':', and can be
 referenced as '@' NAME, e.g.
 
@@ -932,6 +909,14 @@ The address of the line can be referenced as '&' NAME, e.g.
 
     @MCODE: REM \C9
             PRINT USR &MCODE
+
+=head2 PRAGMAS
+
+=head3 #AUTOSTART
+
+    #AUTOSTART=[0|1]
+
+If set to 1, the BASIC program will start automatically when the tape is loaded.
 
 =head1 SEE ALSO
 

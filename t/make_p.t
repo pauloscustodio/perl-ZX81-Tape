@@ -22,7 +22,8 @@ for my $input_bas_file ( path("t/input")->children(qr/\.bas$/) ) {
     }
 
     # repeat using the stript
-    system $^X, "./bin/zx81_make_p", "-o", "$input_basename.p", "$input_bas_file";
+    system $^X, "./bin/zx81_make_p", "-o", "$input_basename.p",
+      "$input_bas_file";
     compare_p( $exp_p_file, "$input_basename.p" );
 
     if ( Test::More->builder->is_passing ) {
@@ -40,7 +41,7 @@ for my $input_bas_file ( path("t/input")->children(qr/\.bas$/) ) {
     # repeat using the stript
     system $^X, "./bin/zx81_dump_p", "-o", "$input_basename.txt", "$exp_p_file";
     compare_text( $exp_dump_file, "$input_basename.txt" );
-    
+
     if ( Test::More->builder->is_passing ) {
         unlink "$input_basename.txt";
     }
@@ -56,7 +57,7 @@ for my $input_bas_file ( path("t/input")->children(qr/\.bas$/) ) {
     # repeat using the stript
     system $^X, "./bin/zx81_list_p", "-o", "$input_basename.bas", "$exp_p_file";
     compare_text( $exp_list_file, "$input_basename.bas" );
-    
+
     if ( Test::More->builder->is_passing ) {
         unlink "$input_basename.bas";
     }

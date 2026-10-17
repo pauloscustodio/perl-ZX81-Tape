@@ -426,10 +426,13 @@ sub list_p {
 
     # dump pragmas
     my $need_newline = 0;
-    my $d_file       = $dpeek->( $sysvars{D_FILE} );
-    my $nxtlin       = $dpeek->( $sysvars{NXTLIN} );
+
+    # dump AUTOSTART, AUTOSTART_LINE
+    my $d_file = $dpeek->( $sysvars{D_FILE} );
+    my $nxtlin = $dpeek->( $sysvars{NXTLIN} );
     if ( $nxtlin < $d_file ) {
         print $bas_fh "#AUTOSTART=1\n";
+        print $bas_fh "#AUTOSTART_LINE=" . $dpeek_be->($nxtlin) . "\n";
         $need_newline = 1;
     }
 
@@ -554,18 +557,19 @@ use Object::Tiny::RW qw(
   lines
   last_line_num
   labels
-  autostart
+  autostart autostart_line
   increment
 );
 
 sub new {
     my ($class) = @_;
     my $self = bless {
-        lines         => [],
-        last_line_num => -1,
-        labels        => {},
-        autostart     => 0,
-        increment     => 10,
+        lines          => [],
+        last_line_num  => -1,
+        labels         => {},
+        autostart      => 0,
+        autostart_line => 0,
+        increment      => 10,
     }, $class;
     return $self;
 }
@@ -676,7 +680,11 @@ sub parse_pragma {
     my ( $self, $line ) = @_;
 
     if ( $line->text =~ /^\s*\#\s*AUTOSTART\s*=\s*(\d+)/ ) {
-        $self->autostart($1);
+        $self->autostart( !!$1 );
+        return 1;
+    }
+    if ( $line->text =~ /^\s*\#\s*AUTOSTART_LINE\s*=\s*(\d+)/ ) {
+        $self->autostart_line($1);
         return 1;
     }
     if ( $line->text =~ /^\s*\#\s*INCREMENT\s*=\s*(\d+)/ ) {
@@ -775,9 +783,13 @@ sub as_bytes {
 
     # Convert the stored BASIC lines to a byte string
     my $prog = '';
+    my @line_addr;
     for my $line ( @{ $self->lines } ) {
+        push @line_addr, [ $line->line_num, $sysvars{PROG} + length($prog) ];
         $prog .= $line->bytes;
     }
+    push @line_addr, [ 10000, $sysvars{PROG} + length($prog) ];
+
     my $prog_start = $sysvars{PROG};
     my $e_ppc      = $prog eq '' ? 0 : unpack( "n", substr( $prog, 0, 2 ) );
 
@@ -794,7 +806,18 @@ sub as_bytes {
     my $mem_end    = $vars_start + length($vars);
 
     # define autostart
-    my $nxtlin = $self->autostart ? $prog_start : $dfile_start;
+    my $nxtlin = $dfile_start;
+    if ( $self->autostart ) {
+
+        # get address of first line at or after autostart line
+        my $autostart_line = $self->autostart_line;
+        for my $line_addr (@line_addr) {
+            if ( $line_addr->[0] >= $autostart_line ) {
+                $nxtlin = $line_addr->[1];
+                last;
+            }
+        }
+    }
 
     # Create the system variables
     my $bytes = '';
@@ -916,7 +939,16 @@ The address of the line can be referenced as '&' NAME, e.g.
 
     #AUTOSTART=[0|1]
 
-If set to 1, the BASIC program will start automatically when the tape is loaded.
+If set to 1, the BASIC program will start automatically when the tape is 
+loaded.
+
+=head3 #AUTOSTART_LINE
+
+    #AUTOSTART=[LINE_NUMBER]
+
+If AUTOSTART_LINE is set, sets the line number where the BASIC program
+will start automatically when the tape is loaded, defaults to the first
+line of the BASIC program.
 
 =head1 SEE ALSO
 

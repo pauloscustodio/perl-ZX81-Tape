@@ -66,7 +66,16 @@ The address of the line can be referenced as '&' NAME, e.g.
 
     #AUTOSTART=[0|1]
 
-If set to 1, the BASIC program will start automatically when the tape is loaded.
+If set to 1, the BASIC program will start automatically when the tape is 
+loaded.
+
+### #AUTOSTART\_LINE
+
+    #AUTOSTART=[LINE_NUMBER]
+
+If AUTOSTART\_LINE is set, sets the line number where the BASIC program
+will start automatically when the tape is loaded, defaults to the first
+line of the BASIC program.
 
 # SEE ALSO
 

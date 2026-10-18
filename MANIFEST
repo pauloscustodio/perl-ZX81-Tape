@@ -8,9 +8,6 @@ Makefile.PL
 MANIFEST			This list of files
 MANIFEST.SKIP
 README.md
-t/expected/autostart.bas
-t/expected/autostart.p
-t/expected/autostart.txt
 t/expected/autostart_01.bas
 t/expected/autostart_01.p
 t/expected/autostart_01.txt
@@ -29,6 +26,12 @@ t/expected/cont_line.txt
 t/expected/empty.bas
 t/expected/empty.p
 t/expected/empty.txt
+t/expected/fast_01.bas
+t/expected/fast_01.p
+t/expected/fast_01.txt
+t/expected/fast_02.bas
+t/expected/fast_02.p
+t/expected/fast_02.txt
 t/expected/hello.bas
 t/expected/hello.p
 t/expected/hello.txt
@@ -98,16 +101,20 @@ t/expected/rem_mcode.txt
 t/expected/rem_tokens.bas
 t/expected/rem_tokens.p
 t/expected/rem_tokens.txt
+t/expected/reminvert.bas
+t/expected/reminvert.p
+t/expected/reminvert.txt
 t/expected/spaces.bas
 t/expected/spaces.p
 t/expected/spaces.txt
-t/input/autostart.bas
 t/input/autostart_01.bas
 t/input/autostart_02.bas
 t/input/autostart_03.bas
 t/input/basic_escape.bas
 t/input/cont_line.bas
 t/input/empty.bas
+t/input/fast_01.bas
+t/input/fast_02.bas
 t/input/hello.bas
 t/input/increment.bas
 t/input/label_addr_01.bas
@@ -131,6 +138,7 @@ t/input/pound.bas
 t/input/quote_escape.bas
 t/input/rem_mcode.bas
 t/input/rem_tokens.bas
+t/input/reminvert.bas
 t/input/spaces.bas
 t/labels_err.t
 t/line_num_err.t

@@ -33,5 +33,14 @@ readme:
 inittests:
 \t$(MAKE) -C t
 
+# --- test ---
+mytest:
+\t$(MAKE) perltidy
+\t$(MAKE) all
+\t$(MAKE) readme
+\t$(MAKE) inittests
+\t$(MAKE) manifest
+\t$(MAKE) test
+
 END
 }

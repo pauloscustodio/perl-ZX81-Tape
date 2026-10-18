@@ -436,6 +436,12 @@ sub list_p {
         $need_newline = 1;
     }
 
+    # dump FAST
+    if ( ( $peek->( $sysvars{CDFLAG} ) & 0x40 ) == 0x00 ) {
+        print $bas_fh "#FAST=1\n";
+        $need_newline = 1;
+    }
+
     if ($need_newline) {
         print $bas_fh "\n";
     }
@@ -562,6 +568,7 @@ use Object::Tiny::RW qw(
   autostart autostart_line
   increment
   reminvert
+  fast
 );
 
 sub new {
@@ -574,6 +581,7 @@ sub new {
         autostart_line => 0,
         increment      => 10,
         reminvert      => 0,
+        fast           => 0,
     }, $class;
     return $self;
 }
@@ -700,6 +708,10 @@ sub parse_pragma {
     }
     if ( $line->text =~ /^\s*\#\s*REMINVERT\s*=\s*(\d+)/ ) {
         $self->reminvert( $1 == 0 ? 0 : 1 );
+        return 1;
+    }
+    if ( $line->text =~ /^\s*\#\s*FAST\s*=\s*(\d+)/ ) {
+        $self->fast( $1 == 0 ? 0 : 1 );
         return 1;
     }
     if ( $line->text =~ /^\s*#/ ) {
@@ -855,6 +867,9 @@ sub as_bytes {
         }
     }
 
+    # define fast mode
+    my $cdflag = $self->fast ? 0x00 : 0x40;    # SLOW if not fast
+
     # Create the system variables
     my $bytes = '';
     $bytes .= pack( "C",            0 );                   # VERSN
@@ -886,7 +901,7 @@ sub as_bytes {
     $bytes .= pack( "C*",           0, 0 );                # COORDS
     $bytes .= pack( "C",            0xBC );                # PR_CC
     $bytes .= pack( "C*",           33, 24 );              # S_POSN
-    $bytes .= pack( "C",            0x40 );                # CDFLAG - SLOW
+    $bytes .= pack( "C",            $cdflag );             # CDFLAG
     $bytes .= pack( "C*", (0) x 32, 0x76 );                # Print buffer
     $bytes .= pack( "C*", (0) x 30 );    # Calculator's memory area
     $bytes .= pack( "C*", (0) x 2 );     # not used
@@ -1000,6 +1015,12 @@ the source file, and takes effect from the line where it is set.
 
 If set to 1, inverts the REM statements in the BASIC program. Only applies
 to REM statements that do not contain binary data.
+
+=head3 #FAST
+
+    #FAST=[0|1]
+
+If set to 1, sets the computer in FAST mode.
 
 =head1 SEE ALSO
 

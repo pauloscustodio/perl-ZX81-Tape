@@ -92,6 +92,12 @@ the source file, and takes effect from the line where it is set.
 If set to 1, inverts the REM statements in the BASIC program. Only applies
 to REM statements that do not contain binary data.
 
+### #FAST
+
+    #FAST=[0|1]
+
+If set to 1, sets the computer in FAST mode.
+
 # SEE ALSO
 
 [ZX81](https://metacpan.org/pod/ZX81)

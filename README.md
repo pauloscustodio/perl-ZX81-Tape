@@ -98,6 +98,18 @@ to REM statements that do not contain binary data.
 
 If set to 1, sets the computer in FAST mode.
 
+### #VARS
+
+    #VARS A=123
+    #VARS I=0,10,1,20
+    #VARS S$="HELLO"
+    #VARS M(2,3)=11,12,13,21,22,23
+    #VARS M$(2,3,2)="AA","AB","AC","BA","BB","BC"
+
+Specifies the initial values of variables in the BASIC program. I in the
+example above is a loop variable with value 0, limit 10, step 1 and line 
+number 20.
+
 # SEE ALSO
 
 [ZX81](https://metacpan.org/pod/ZX81)

@@ -2,7 +2,7 @@ package ZX81::Tape;
 
 use Modern::Perl;
 use Path::Tiny;
-use ZX81::Tokenize qw( tokenize_basic );
+use ZX81::Tokenize qw( tokenize_basic encode_chars encode_float );
 
 our $VERSION = '0.002';
 
@@ -13,6 +13,39 @@ our @EXPORT_OK = qw(
   dump_p
   list_p
 );
+
+#------------------------------------------------------------------------------
+# Memory area
+#------------------------------------------------------------------------------
+{
+
+    package ZX81::Tape::Memory;
+    use Object::Tiny::RW qw( start data );
+
+    sub new {
+        my ( $class, $start, @data ) = @_;
+        return $class->SUPER::new( start => $start, data => \@data );
+    }
+
+    sub peek {
+        my ( $self, $addr ) = @_;
+        my $p = $addr - $self->start;
+        if ( $p < 0 || $p >= @{ $self->data } ) {
+            return 0;
+        }
+        return $self->data->[$p];
+    }
+
+    sub dpeek {
+        my ( $self, $addr ) = @_;
+        return $self->peek($addr) | ( $self->peek( $addr + 1 ) << 8 );
+    }
+
+    sub dpeek_be {
+        my ( $self, $addr ) = @_;
+        return ( $self->peek($addr) << 8 ) | $self->peek( $addr + 1 );
+    }
+}
 
 #------------------------------------------------------------------------------
 # zx81 system variables and character mappings
@@ -239,6 +272,32 @@ my %zx81chars = (
     0xff => 'COPY',
 );
 
+# bytes is a list of 5 bytes, representing a ZX81 floating point number
+sub zx81_to_float {
+    my (@bytes) = @_;
+
+    # Zero special case
+    if (   $bytes[0] == 0
+        && $bytes[1] == 0
+        && $bytes[2] == 0
+        && $bytes[3] == 0
+        && $bytes[4] == 0 )
+    {
+
+        return 0.0;
+    }
+
+    my $exp  = $bytes[0] - 128;
+    my $sign = ( $bytes[1] & 0x80 ) ? -1.0 : 1.0;
+
+    my $mant =
+      ( ( $bytes[1] | 0x80 ) << 24 ) | ( $bytes[2] << 16 ) |
+      ( $bytes[3] << 8 ) | ( $bytes[4] );
+
+    my $value = $sign * $mant * ( 2**( $exp - 32 ) );
+    return $value;
+}
+
 #------------------------------------------------------------------------------
 # make_p driver
 #------------------------------------------------------------------------------
@@ -268,32 +327,25 @@ sub dump_p {
     }
 
     # load memory
-    my @mem = ( map { ord } split //, path($p_filename)->slurp_raw );
+    my @bytes = ( map { ord } split //, path($p_filename)->slurp_raw );
+    my $mem   = ZX81::Tape::Memory->new( 0x4009, @bytes );
 
     # memory access helpers
-    my $peek = sub {
-        my ($addr) = @_;
-        return $mem[ $addr - 0x4009 ];
-    };
-    my $dpeek = sub {
-        my ($addr) = @_;
-        return $mem[ $addr - 0x4009 ] | ( $mem[ $addr + 1 - 0x4009 ] << 8 );
-    };
-    my $dpeek_be = sub {
-        my ($addr) = @_;
-        return ( $mem[ $addr - 0x4009 ] << 8 ) | $mem[ $addr + 1 - 0x4009 ];
-    };
     my $peek_text = sub {
         my ( $addr, $size ) = @_;
         my $text = "";
         for ( my $i = 0 ; $i < $size ; $i++ ) {
-            my $byte = $peek->( $addr + $i );
-            if ( $byte == 0x7E ) {
+            my $byte = $mem->peek( $addr + $i );
+            if ( $byte == 0x7E && $size > 1 ) {
 
                 # floating point number
-                for ( my $j = 0 ; $j < 6 && $i + $j < $size ; $j++ ) {
-                    $text .= sprintf( "\\%02X", $peek->( $addr + $i + $j ) );
+                my @bytes;
+                for ( my $j = 1 ; $j < 6 ; $j++ ) {
+                    push @bytes, $mem->peek( $addr + $i + $j );
                 }
+                my $float = zx81_to_float(@bytes);
+                $text .= "{$float}";
+
                 $i += 6 - 1;
             }
             elsif ( exists $zx81chars{$byte} ) {
@@ -318,7 +370,7 @@ sub dump_p {
             my $text_dump   = "";
             my $num_dumpped = 0;
             for ( my $j = 0 ; $j < 8 && $i + $j < $size ; $j++ ) {
-                my $byte = $peek->( $addr + $i + $j );
+                my $byte = $mem->peek( $addr + $i + $j );
                 $num_dumpped++;
                 $bytes_dump .= sprintf( "%02X ", $byte );
                 $text_dump  .= $peek_text->( $addr + $i + $j, 1 ) . " ";
@@ -331,9 +383,9 @@ sub dump_p {
     };
 
     my $prog   = $sysvars{PROG};
-    my $d_file = $dpeek->( $sysvars{D_FILE} );
-    my $vars   = $dpeek->( $sysvars{VARS} );
-    my $e_line = $dpeek->( $sysvars{E_LINE} );
+    my $d_file = $mem->dpeek( $sysvars{D_FILE} );
+    my $vars   = $mem->dpeek( $sysvars{VARS} );
+    my $e_line = $mem->dpeek( $sysvars{E_LINE} );
 
     # show system variables
     print $dump_fh "System Variables:\n";
@@ -351,18 +403,26 @@ sub dump_p {
         elsif ( $addr == $sysvars{MEMBOT} ) {
 
             # memory calculator area
-            $dump->( $addr, 30, "MEMBOT" );
+            for ( my $i = 0 ; $i < 30 / 5 ; $i++ ) {
+                my @bytes;
+                for my $j ( 0 .. 4 ) {
+                    push @bytes, $mem->peek( $addr + $i * 5 + $j );
+                }
+                my $float = zx81_to_float(@bytes);
+                $dump->( $addr + 5 * $i, 5, "MEM[$i] = $float" );
+            }
+
             $addr += 30 - 1;
         }
         elsif ( exists $rev_sysvars{ $addr + 1 } ) {
 
             # byte variable
-            printf $dump_fh "%04X    %02X  %s\n", $addr, $peek->($addr),
+            printf $dump_fh "%04X    %02X  %s\n", $addr, $mem->peek($addr),
               $rev_sysvars{$addr} // "";
         }
         else {
             # word variable
-            printf $dump_fh "%04X  %04X  %s\n", $addr, $dpeek->($addr),
+            printf $dump_fh "%04X  %04X  %s\n", $addr, $mem->dpeek($addr),
               $rev_sysvars{$addr} // "";
             $addr++;
         }
@@ -371,8 +431,8 @@ sub dump_p {
     # show BASIC program
     print $dump_fh "\nBASIC Program:\n";
     for ( my $addr = $prog ; $addr < $d_file ; ) {
-        my $line_num = $dpeek_be->($addr);
-        my $size     = $dpeek->( $addr + 2 );
+        my $line_num = $mem->dpeek_be($addr);
+        my $size     = $mem->dpeek( $addr + 2 );
         $dump->(
             $addr, 4 + $size,
             "[$size] $line_num " . $peek_text->( $addr + 4, $size - 1 )
@@ -389,7 +449,12 @@ sub dump_p {
 
     # Show VARS section
     print $dump_fh "\nVARS Section:\n";
-    $dump->( $vars, $e_line - $vars, "VARS" );
+    my $addr = $vars;
+    while ( $addr < $e_line ) {
+        my ( $size, $text ) = decode_var( $mem, $addr );
+        $dump->( $addr, $size, $text );
+        $addr += $size;
+    }
 }
 
 #------------------------------------------------------------------------------
@@ -408,37 +473,35 @@ sub list_p {
     }
 
     # load memory
-    my @mem = ( map { ord } split //, path($p_filename)->slurp_raw );
-
-    # memory access helpers
-    my $peek = sub {
-        my ($addr) = @_;
-        return $mem[ $addr - 0x4009 ];
-    };
-    my $dpeek = sub {
-        my ($addr) = @_;
-        return $mem[ $addr - 0x4009 ] | ( $mem[ $addr + 1 - 0x4009 ] << 8 );
-    };
-    my $dpeek_be = sub {
-        my ($addr) = @_;
-        return ( $mem[ $addr - 0x4009 ] << 8 ) | $mem[ $addr + 1 - 0x4009 ];
-    };
+    my @bytes = ( map { ord } split //, path($p_filename)->slurp_raw );
+    my $mem   = ZX81::Tape::Memory->new( 0x4009, @bytes );
 
     # dump pragmas
     my $need_newline = 0;
 
     # dump AUTOSTART, AUTOSTART_LINE
-    my $d_file = $dpeek->( $sysvars{D_FILE} );
-    my $nxtlin = $dpeek->( $sysvars{NXTLIN} );
+    my $d_file = $mem->dpeek( $sysvars{D_FILE} );
+    my $nxtlin = $mem->dpeek( $sysvars{NXTLIN} );
     if ( $nxtlin < $d_file ) {
         print $bas_fh "#AUTOSTART=1\n";
-        print $bas_fh "#AUTOSTART_LINE=" . $dpeek_be->($nxtlin) . "\n";
+        print $bas_fh "#AUTOSTART_LINE=" . $mem->dpeek_be($nxtlin) . "\n";
         $need_newline = 1;
     }
 
     # dump FAST
-    if ( ( $peek->( $sysvars{CDFLAG} ) & 0x40 ) == 0x00 ) {
+    if ( ( $mem->peek( $sysvars{CDFLAG} ) & 0x40 ) == 0x00 ) {
         print $bas_fh "#FAST=1\n";
+        $need_newline = 1;
+    }
+
+    # dump VARS
+    my $vars   = $mem->dpeek( $sysvars{VARS} );
+    my $e_line = $mem->dpeek( $sysvars{E_LINE} );
+    my $addr   = $vars;
+    while ( $addr < $e_line - 1 ) {
+        my ( $size, $text ) = decode_var( $mem, $addr );
+        print $bas_fh "#VARS $text\n";
+        $addr += $size;
         $need_newline = 1;
     }
 
@@ -449,15 +512,15 @@ sub list_p {
     # dump BASIC program
     my $prog = $sysvars{PROG};
     for ( my $addr = $prog ; $addr < $d_file ; ) {
-        my $line_num = $dpeek_be->($addr);
-        my $size     = $dpeek->( $addr + 2 );
+        my $line_num = $mem->dpeek_be($addr);
+        my $size     = $mem->dpeek( $addr + 2 );
         printf $bas_fh "%5d ", $line_num;
 
         # rem line with possible binary data
-        if ( $peek->( $addr + 4 ) == 0xEA ) {    # REM
+        if ( $mem->peek( $addr + 4 ) == 0xEA ) {    # REM
             my $has_binary_data = 0;
             for ( my $i = 1 ; $i < $size - 1 ; $i++ ) {
-                if ( ( $peek->( $addr + 4 + $i ) & 0x40 ) == 0x40 ) {
+                if ( ( $mem->peek( $addr + 4 + $i ) & 0x40 ) == 0x40 ) {
                     $has_binary_data = 1;
                     last;
                 }
@@ -465,14 +528,14 @@ sub list_p {
             if ($has_binary_data) {
                 print $bas_fh " REM ";
                 for ( my $i = 1 ; $i < $size - 1 ; $i++ ) {
-                    printf $bas_fh "\\%02X", $peek->( $addr + 4 + $i );
+                    printf $bas_fh "\\%02X", $mem->peek( $addr + 4 + $i );
                 }
                 print $bas_fh "\n";
             }
             else {
                 print $bas_fh " REM ";
                 for ( my $i = 1 ; $i < $size - 1 ; $i++ ) {
-                    my $byte = $peek->( $addr + 4 + $i );
+                    my $byte = $mem->peek( $addr + 4 + $i );
                     if ( ( $byte & 0x40 ) == 0 && exists $zx81chars{$byte} ) {
                         print $bas_fh $zx81chars{$byte};
                     }
@@ -490,7 +553,7 @@ sub list_p {
         # BASIC text
         my $in_quote = 0;
         for ( my $i = 0 ; $i < $size - 1 ; $i++ ) {
-            my $byte = $peek->( $addr + 4 + $i );
+            my $byte = $mem->peek( $addr + 4 + $i );
             if ( $byte == 0x0B ) {
                 $in_quote = !$in_quote;
             }
@@ -523,6 +586,209 @@ sub list_p {
         $addr += 4 + $size;
         next;
     }
+}
+
+#------------------------------------------------------------------------------
+# decode BASIC vars
+#------------------------------------------------------------------------------
+sub decode_var {
+    my ( $mem, $addr ) = @_;
+    my $start_addr = $addr;
+
+    my $byte = $mem->peek( $addr++ );
+    if ( $byte == 0x80 ) {
+
+        # end marker
+        return ( 1, "end marker" );
+    }
+
+    if ( ( $byte & 0xE0 ) == 0x60 ) {
+
+        # single letter variable
+        $byte = ( $byte & 0x3F ) | 0x20;
+        my $name = $zx81chars{$byte};
+
+        my @bytes;
+        for ( my $i = 0 ; $i < 5 ; $i++ ) {
+            push @bytes, $mem->peek( $addr++ );
+        }
+        my $float = zx81_to_float(@bytes);
+        return ( $addr - $start_addr, $name . "=$float" );
+    }
+
+    if ( ( $byte & 0xE0 ) == 0xA0 ) {
+
+        # multiple letter variable
+        $byte = ( $byte & 0x3F ) | 0x20;
+        my $name = $zx81chars{$byte};    # first letter
+
+        while ( ( $mem->peek($addr) & 0xC0 ) == 0x00 )
+        {                                # second..before-last letters
+            $byte = $mem->peek( $addr++ );
+            $byte = ( $byte & 0x3F ) | 0x20;
+            $name .= $zx81chars{$byte};    # second..before-last letters
+        }
+
+        $byte = $mem->peek( $addr++ );
+        ( $byte & 0xC0 ) == 0x80
+          or die "decode_var: unexpected byte $byte at $addr";
+        $byte = ( $byte & 0x3F ) | 0x20;
+        $name .= $zx81chars{$byte};    # last letter
+
+        my @bytes;
+        for ( my $i = 0 ; $i < 5 ; $i++ ) {
+            push @bytes, $mem->peek( $addr++ );
+        }
+        my $float = zx81_to_float(@bytes);
+        return ( $addr - $start_addr, $name . "=$float" );
+    }
+
+    if ( ( $byte & 0xE0 ) == 0x80 ) {
+
+        # numeric array
+        $byte = ( $byte & 0x3F ) | 0x20;
+        my $name = $zx81chars{$byte};
+
+        # array size
+        my $size = $mem->dpeek($addr);
+        $addr += 2;
+
+        # number of dimensions
+        my $num_dims = $mem->peek( $addr++ );
+
+        # dimensions
+        my $num_elements = 1;
+        my @dims;
+        for ( 1 .. $num_dims ) {
+            my $dim = $mem->dpeek($addr);
+            $addr += 2;
+            push @dims, $dim;
+            $num_elements *= $dim;
+        }
+
+        # values
+        my @values;
+        for ( 1 .. $num_elements ) {
+            my @bytes;
+            for ( my $i = 0 ; $i < 5 ; $i++ ) {
+                push @bytes, $mem->peek( $addr++ );
+            }
+            my $float = zx81_to_float(@bytes);
+            push @values, $float;
+        }
+
+        # text representation
+        my $text =
+          $name . "(" . join( ",", @dims ) . ")=" . join( ",", @values );
+        return ( $addr - $start_addr, $text );
+    }
+
+    if ( ( $byte & 0xE0 ) == 0xE0 ) {
+
+        # loop variable
+        $byte = ( $byte & 0x3F ) | 0x20;
+        my $name = $zx81chars{$byte};
+
+        # value, limit, step
+        my @values;
+        for ( 1 .. 3 ) {
+            my @bytes;
+            for ( my $i = 0 ; $i < 5 ; $i++ ) {
+                push @bytes, $mem->peek( $addr++ );
+            }
+            my $float = zx81_to_float(@bytes);
+            push @values, $float;
+        }
+
+        # line number
+        my $line_num = $mem->dpeek($addr);
+        $addr += 2;
+        push @values, $line_num;
+
+        # text representation
+        my $text = $name . "=" . join( ",", @values );
+
+        return ( $addr - $start_addr, $text );
+    }
+
+    if ( ( $byte & 0xE0 ) == 0x40 ) {
+
+        # string variable
+        $byte = ( $byte & 0x3F ) | 0x20;
+        my $name = $zx81chars{$byte};
+
+        # string length
+        my $length = $mem->dpeek($addr);
+        $addr += 2;
+
+        # string value
+        my $value = '"';
+        for ( my $i = 0 ; $i < $length ; $i++ ) {
+            my $byte = $mem->peek( $addr++ );
+            if ( exists $zx81chars{$byte} ) {
+                $value .= $zx81chars{$byte};
+            }
+            else {
+                die "decode_var: unexpected byte $byte at $addr";
+            }
+        }
+        $value .= '"';
+
+        # text representation
+        my $text = $name . '$' . '=' . $value;
+        return ( $addr - $start_addr, $text );
+    }
+
+    if ( ( $byte & 0xE0 ) == 0xC0 ) {
+
+        # string array
+        $byte = ( $byte & 0x3F ) | 0x20;
+        my $name = $zx81chars{$byte};
+
+        # array size
+        my $size = $mem->dpeek($addr);
+        $addr += 2;
+
+        # number of dimensions
+        my $num_dims = $mem->peek( $addr++ );
+
+        # dimensions
+        my $num_elements = 1;
+        my @dims;
+        for ( 1 .. $num_dims ) {
+            my $dim = $mem->dpeek($addr);
+            $addr += 2;
+            push @dims, $dim;
+            $num_elements *= $dim;
+        }
+        my $last_dim = $dims[-1];
+        $num_elements /= $last_dim;
+
+        # values
+        my @values;
+        for ( 1 .. $num_elements ) {
+            my $value = '"';
+            for ( my $i = 0 ; $i < $last_dim ; $i++ ) {
+                my $byte = $mem->peek( $addr++ );
+                if ( exists $zx81chars{$byte} ) {
+                    $value .= $zx81chars{$byte};
+                }
+                else {
+                    die "decode_var: unexpected byte $byte at $addr";
+                }
+            }
+            $value .= '"';
+            push @values, $value;
+        }
+
+        # text representation
+        my $text =
+          $name . '$' . "(" . join( ",", @dims ) . ")=" . join( ",", @values );
+
+        return ( $addr - $start_addr, $text );
+    }
+
+    die "invalid byte $byte at ", $addr - 1;
 }
 
 #------------------------------------------------------------------------------
@@ -559,10 +825,39 @@ sub list_p {
 }
 
 #------------------------------------------------------------------------------
+# BASIC variable
+#------------------------------------------------------------------------------
+{
+
+    package ZX81::Tape::Var;
+    use Object::Tiny::RW qw(
+      name is_string is_array is_loop
+      dims
+      value limit step line_num
+    );
+
+    sub new {
+        my ($class) = @_;
+        return bless {
+            name      => '',
+            is_string => 0,
+            is_array  => 0,
+            is_loop   => 0,
+            dims      => [],
+            value     => [0],
+            limit     =>  0,
+            step      =>  0,
+            line_num  => -1,
+        }, $class;
+    }
+}
+
+#------------------------------------------------------------------------------
 # Tape class
 #------------------------------------------------------------------------------
 use Object::Tiny::RW qw(
   lines
+  vars
   last_line_num
   labels
   autostart autostart_line
@@ -575,6 +870,7 @@ sub new {
     my ($class) = @_;
     my $self = bless {
         lines          => [],
+        vars           => [],
         last_line_num  => -1,
         labels         => {},
         autostart      => 0,
@@ -714,6 +1010,11 @@ sub parse_pragma {
         $self->fast( $1 == 0 ? 0 : 1 );
         return 1;
     }
+    if ( $line->text =~ /^\s*\#\s*VARS\s*(.*?)\s*=\s*(.*)/ ) {
+        my $var = $self->parse_var( $line, $1, $2 );
+        push @{ $self->vars }, $var if defined $var;
+        return 1;
+    }
     if ( $line->text =~ /^\s*#/ ) {
 
         # unrecognized pragma, handle as comment
@@ -721,6 +1022,103 @@ sub parse_pragma {
     }
 
     return 0;
+}
+
+sub parse_var {
+    my ( $self, $line, $name, $value ) = @_;
+
+    my $var = ZX81::Tape::Var->new();
+
+    # collect variable name
+    my $text = $name;
+    $text =~ s/^\s*([a-z_]\w*)//i
+      or $line->error( "invalid variable name: " . $name );
+    $var->name($1);
+
+    # collect '$' for string variable
+    if ( $text =~ s/^\s*\$// ) {
+        $var->is_string(1);
+    }
+
+    # collect array dimensions
+    if ( $text =~ s/^\s*\((.*)\)// ) {
+        $var->is_array(1);
+        my @dims = split( /\s*,\s*/, $1 );
+        for my $dim (@dims) {
+            if ( $dim !~ /^\d+$/ ) {
+                $line->error( "invalid array dimension: " . $dim );
+            }
+            push @{ $var->dims }, 0 + $dim;
+        }
+    }
+
+    # check for any remaining text in the variable name
+    if ( $text =~ /\S/ ) {
+        $line->error( "invalid variable name: " . $name );
+    }
+
+    # check variable name length
+    if ( $var->is_string || $var->is_array ) {
+        if ( length( $var->name ) > 1 ) {
+            $line->error( "invalid variable name: " . $name );
+        }
+    }
+
+    # compute number of elements needed
+    my $num_elements        = 1;
+    my $size_string_element = 0;
+    if ( $var->is_array ) {
+        for my $dim ( @{ $var->dims } ) {
+            $num_elements *= $dim;
+        }
+        if ( $var->is_string ) {
+            $size_string_element = $var->dims->[-1];
+            $num_elements /= $size_string_element;
+        }
+    }
+
+    # collect variable values
+    if ( !$var->is_string ) {
+        my @values = split( /\s*,\s*/, $value );
+        if ( @values == 4 && !$var->is_array ) {
+            $var->is_loop(1);
+        }
+        elsif ( @values != $num_elements ) {
+            $line->error(
+                "number of values does not match array dimensions: " . $value );
+        }
+        for (@values) {
+            if ( $_ !~ /^-?(\d+|\d*\.\d+|\d+\.\d*)(e[-+]?\d+)?$/i ) {
+                $line->error( "invalid variable value: " . $_ );
+            }
+        }
+        if ( $var->is_loop ) {
+            $var->value( [ 0 + $values[0] ] );
+            $var->limit( 0 + $values[1] );
+            $var->step( 0 + $values[2] );
+            $var->line_num( 0 + $values[3] );
+        }
+        else {
+            $var->value( [ map { 0 + $_ } @values ] );
+        }
+    }
+    else {
+        $text = $value;
+        my @values;
+        while ( $text =~ s/^\s*("((?:[^"\\]|\\.)*)")\s*,?// ) {
+            push @values, $2;
+        }
+        if ( @values != $num_elements ) {
+            $line->error(
+                "number of values does not match array dimensions: " . $value );
+        }
+        if ( $text =~ /\S/ ) {
+            $line->error( "invalid string variable value: " . $text );
+        }
+        $var->value( [@values] );
+    }
+
+    return $var;
 }
 
 sub parse_label_line_num {
@@ -849,7 +1247,7 @@ sub as_bytes {
     my $dfile_start = $prog_start + length($prog);
 
     # Create an empty vars area
-    my $vars       = pack( "C", 0x80 );
+    my $vars       = $self->vars_as_bytes();
     my $vars_start = $dfile_start + length($dfile);
     my $mem_end    = $vars_start + length($vars);
 
@@ -911,6 +1309,141 @@ sub as_bytes {
     $bytes .= $dfile;
     $bytes .= $vars;
 
+    return $bytes;
+}
+
+sub vars_as_bytes {
+    my ($self) = @_;
+
+    my $bytes = '';
+    for my $var ( @{ $self->vars } ) {
+        my @name_bytes = map { ord } split //, encode_chars( $var->name );
+        if ( $var->is_loop ) {
+
+            # loop variable
+            # 111-letter
+            $bytes .= pack( "C", ( $name_bytes[0] & 0x3F ) | 0xE0 );
+
+            # value
+            $bytes .= encode_float( $var->value->[0] );
+
+            # limit
+            $bytes .= encode_float( $var->limit );
+
+            # step
+            $bytes .= encode_float( $var->step );
+
+            # line number
+            $bytes .= pack( "v", $var->line_num );
+        }
+        elsif ( $var->is_string ) {
+            if ( $var->is_array ) {
+
+                # string array variable
+                my $num_values = 1;
+                for my $dim ( @{ $var->dims } ) {
+                    $num_values *= $dim;
+                }
+                my $last_dim = $var->dims->[-1];
+                $num_values /= $last_dim;
+
+                # 110-letter
+                $bytes .= pack( "C", ( $name_bytes[0] & 0x1F ) | 0xC0 );
+
+                # total size of array in bytes
+                $bytes .= pack( "v",
+                    1 + 2 * scalar( @{ $var->dims } ) +
+                      $last_dim * $num_values );
+
+                # number of dimensions
+                $bytes .= pack( "C", scalar( @{ $var->dims } ) );
+
+                # dimensions
+                for my $dim ( @{ $var->dims } ) {
+                    $bytes .= pack( "v", $dim );
+                }
+
+                # values
+                for ( 0 .. $num_values - 1 ) {
+                    my $value = $var->value->[$_];
+
+                    # make fixed length
+                    $value .= ' ' x ( $last_dim - length($value) );
+                    $value = substr( $value, 0, $last_dim );
+
+                    # convert to bytes
+                    my @value_bytes = map { ord } split //,
+                      encode_chars($value);
+                    $bytes .= pack( "C*", @value_bytes );
+                }
+            }
+            else {
+                # string variable
+                my @value_bytes = map { ord } split //,
+                  encode_chars( $var->value->[0] );
+
+                # 010-letter
+                $bytes .= pack( "C", ( $name_bytes[0] & 0x1F ) | 0x40 );
+
+                # length of string
+                $bytes .= pack( "v", scalar(@value_bytes) );
+
+                # string bytes
+                $bytes .= pack( "C*", @value_bytes );
+            }
+        }
+        else {
+            if ( $var->is_array ) {
+
+                # numeric array variable
+                my $num_values = 1;
+                for my $dim ( @{ $var->dims } ) {
+                    $num_values *= $dim;
+                }
+
+                # 100-letter
+                $bytes .= pack( "C", ( $name_bytes[0] & 0x1F ) | 0x80 );
+
+                # total size of array in bytes
+                $bytes .= pack( "v",
+                    1 + 2 * scalar( @{ $var->dims } ) + 5 * $num_values );
+
+                # number of dimensions
+                $bytes .= pack( "C", scalar( @{ $var->dims } ) );
+
+                # dimensions
+                for my $dim ( @{ $var->dims } ) {
+                    $bytes .= pack( "v", $dim );
+                }
+
+                # values
+                for ( 0 .. $num_values - 1 ) {
+                    $bytes .= encode_float( $var->value->[$_] );
+                }
+            }
+            else {
+                # numeric variable
+                if ( @name_bytes == 1 ) {
+
+                    # 011-letter
+                    $bytes .= pack( "C", ( $name_bytes[0] & 0x3F ) | 0x60 );
+                }
+                else {
+                    # 101-letter, 001-letter, 101-letter
+                    $bytes .= pack( "C", ( $name_bytes[0] & 0x3F ) | 0xA0 );
+                    for ( 1 .. $#name_bytes - 1 ) {
+                        $bytes .= pack( "C", $name_bytes[$_] & 0x3F );
+                    }
+                    $bytes .= pack( "C", ( $name_bytes[-1] & 0x3F ) | 0x80 );
+                }
+
+                # pack value
+                $bytes .= encode_float( $var->value->[0] );
+            }
+        }
+    }
+
+    $bytes .= pack( "C", 0x80 );    # end of vars
     return $bytes;
 }
 
@@ -1021,6 +1554,18 @@ to REM statements that do not contain binary data.
     #FAST=[0|1]
 
 If set to 1, sets the computer in FAST mode.
+
+=head3 #VARS
+
+    #VARS A=123
+    #VARS I=0,10,1,20
+    #VARS S$="HELLO"
+    #VARS M(2,3)=11,12,13,21,22,23
+    #VARS M$(2,3,2)="AA","AB","AC","BA","BB","BC"
+
+Specifies the initial values of variables in the BASIC program. I in the
+example above is a loop variable with value 0, limit 10, step 1 and line 
+number 20.
 
 =head1 SEE ALSO
 

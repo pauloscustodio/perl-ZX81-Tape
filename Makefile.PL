@@ -42,5 +42,10 @@ mytest:
 \t$(MAKE) manifest
 \t$(MAKE) test
 
+# --- clean ---
+myclean:
+\t$(MAKE) clean
+\tfind . -name '*.bak' -exec rm -f {} \;
+
 END
 }

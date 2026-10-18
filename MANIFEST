@@ -10,7 +10,6 @@ MANIFEST.SKIP
 README.md
 t/labels_err.t
 t/line_num_err.t
-t/make_p.t
 t/Makefile
 t/round_trip_specific.t
 t/round_trip_t2p.t

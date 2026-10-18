@@ -4,7 +4,7 @@ use Modern::Perl;
 use Path::Tiny;
 use ZX81::Tokenize qw( tokenize_basic encode_chars encode_float );
 
-our $VERSION = '0.003';
+our $VERSION = '0.004';
 
 use Exporter qw(import);
 

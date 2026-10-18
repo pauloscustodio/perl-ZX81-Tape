@@ -298,7 +298,7 @@ sub dump_p {
             }
             elsif ( exists $zx81chars{$byte} ) {
                 my $code = $zx81chars{$byte};
-                if ( length($code) > 1 && $code =~ /\w$/ ) {
+                if ( $code =~ /\w\w$/ ) {
                     $code .= " ";
                 }
                 $text .= $code;
@@ -528,6 +528,7 @@ sub list_p {
     use Object::Tiny::RW qw(
       src_file src_line_num
       line_num label text
+      reminvert
       bytes
     );
 
@@ -539,6 +540,7 @@ sub list_p {
             line_num     => -1,
             label        => '',
             text         => '',
+            reminvert    => 0,
             bytes        => '',
         }, $class;
     }
@@ -559,6 +561,7 @@ use Object::Tiny::RW qw(
   labels
   autostart autostart_line
   increment
+  reminvert
 );
 
 sub new {
@@ -570,6 +573,7 @@ sub new {
         autostart      => 0,
         autostart_line => 0,
         increment      => 10,
+        reminvert      => 0,
     }, $class;
     return $self;
 }
@@ -639,6 +643,9 @@ sub parse_file {
             next;
         }
 
+        # add reminvert tag
+        $line->reminvert( $self->reminvert );
+
         # number the line
         if ( $line->line_num >= 0 ) {
             if ( $line->line_num <= $self->last_line_num ) {
@@ -680,15 +687,19 @@ sub parse_pragma {
     my ( $self, $line ) = @_;
 
     if ( $line->text =~ /^\s*\#\s*AUTOSTART\s*=\s*(\d+)/ ) {
-        $self->autostart( !!$1 );
+        $self->autostart( $1 == 0 ? 0 : 1 );
         return 1;
     }
     if ( $line->text =~ /^\s*\#\s*AUTOSTART_LINE\s*=\s*(\d+)/ ) {
-        $self->autostart_line($1);
+        $self->autostart_line( 0 + $1 );
         return 1;
     }
     if ( $line->text =~ /^\s*\#\s*INCREMENT\s*=\s*(\d+)/ ) {
-        $self->increment($1);
+        $self->increment( 0 + $1 );
+        return 1;
+    }
+    if ( $line->text =~ /^\s*\#\s*REMINVERT\s*=\s*(\d+)/ ) {
+        $self->reminvert( $1 == 0 ? 0 : 1 );
         return 1;
     }
     if ( $line->text =~ /^\s*#/ ) {
@@ -765,6 +776,11 @@ sub compile {
                 $text =~ s/\&$label/$addr/g;
             }
 
+            # apply reminvert if requested
+            if ( $line->reminvert ) {
+                $text = $self->invert_rem($text);
+            }
+
             my $line_bytes = tokenize_basic($text);
             $line->bytes($line_bytes);
             $bin .= $line_bytes;
@@ -776,6 +792,26 @@ sub compile {
             $pass     = 0;           # repeat if size changed
         }
     }
+}
+
+sub invert_rem {
+    my ( $self, $text ) = @_;
+    if ( $text =~ /^(\s*\d+\s+REM ?)(.*)$/i ) {
+        my ( $rem_statement, $rem_text ) = ( $1, $2 );
+        if ( $rem_text =~ /\\/ ) {
+
+            # don't invert if there are escape sequences
+            return $text;
+        }
+
+        # invert (prepend %) to all not inverted characters
+        my @chars = $rem_text =~ /(\%?[^\%])/g;
+        for (@chars) { s/^([^\%])/\%$1/; }    # invert C to %C
+        $rem_text = join( '', @chars );
+
+        return $rem_statement . $rem_text;
+    }
+    return $text;
 }
 
 sub as_bytes {
@@ -957,6 +993,13 @@ line of the BASIC program.
 If INCREMENT is set, specifies the line number increment between consecutive
 lines in the BASIC program, defaults to 10. Can be entered multiple times in
 the source file, and takes effect from the line where it is set.
+
+=head3 #REMINVERT
+
+    #REMINVERT=[0|1]
+
+If set to 1, inverts the REM statements in the BASIC program. Only applies
+to REM statements that do not contain binary data.
 
 =head1 SEE ALSO
 

@@ -85,6 +85,13 @@ If INCREMENT is set, specifies the line number increment between consecutive
 lines in the BASIC program, defaults to 10. Can be entered multiple times in
 the source file, and takes effect from the line where it is set.
 
+### #REMINVERT
+
+    #REMINVERT=[0|1]
+
+If set to 1, inverts the REM statements in the BASIC program. Only applies
+to REM statements that do not contain binary data.
+
 # SEE ALSO
 
 [ZX81](https://metacpan.org/pod/ZX81)

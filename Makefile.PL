@@ -39,7 +39,6 @@ mytest:
 \t$(MAKE) all
 \t$(MAKE) readme
 \t$(MAKE) inittests
-\t$(MAKE) manifest
 \t$(MAKE) test
 
 # --- clean ---

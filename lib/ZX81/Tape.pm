@@ -505,6 +505,27 @@ sub list_p {
         $need_newline = 1;
     }
 
+    # dump DFILE, DFILE_COLLAPSED
+    my $dfile_collapsed = 0;
+    if ( $vars - $d_file < 1 + 33 * 24 ) {
+        print $bas_fh "#DFILE_COLLAPSED=1\n";
+        $dfile_collapsed = 1;
+        $need_newline    = 1;
+    }
+    my @dfile_lines = decode_dfile($mem);
+    if ( !$dfile_collapsed ) {
+        for (@dfile_lines) {
+            s/\s+$//;    # trim trailing spaces
+        }
+        while ( @dfile_lines && $dfile_lines[-1] eq "" ) {
+            pop @dfile_lines;
+        }
+    }
+    for my $line (@dfile_lines) {
+        print $bas_fh "#DFILE=\"$line\"\n";
+        $need_newline = 1;
+    }
+
     if ($need_newline) {
         print $bas_fh "\n";
     }
@@ -586,6 +607,41 @@ sub list_p {
         $addr += 4 + $size;
         next;
     }
+}
+
+#------------------------------------------------------------------------------
+# decode BASIC display
+#------------------------------------------------------------------------------
+sub decode_dfile {
+    my ($mem)  = @_;
+    my $d_file = $mem->dpeek( $sysvars{D_FILE} );
+    my $vars   = $mem->dpeek( $sysvars{VARS} );
+
+    # collect dfile lines
+    my @dfile;
+    for ( my $addr = $d_file + 1 ; $addr < $vars ; ) {
+        my $line = "";
+        for ( my $col = 0 ; $col < 33 ; $col++ ) {
+            my $byte = $mem->peek( $addr++ );
+            if ( $byte == 0x76 ) {    # end of line
+                last;
+            }
+            elsif ( exists $zx81chars{$byte} ) {
+                $line .= $zx81chars{$byte};
+            }
+            else {
+                die "decode_dfile: unexpected byte $byte at $addr";
+            }
+        }
+        push @dfile, $line;
+    }
+
+    # trim trailing empty lines
+    while ( @dfile && $dfile[-1] eq "" ) {
+        pop @dfile;
+    }
+
+    return @dfile;
 }
 
 #------------------------------------------------------------------------------
@@ -858,6 +914,8 @@ sub decode_var {
 use Object::Tiny::RW qw(
   lines
   vars
+  dfile
+  dfile_collapsed
   last_line_num
   labels
   autostart autostart_line
@@ -869,15 +927,17 @@ use Object::Tiny::RW qw(
 sub new {
     my ($class) = @_;
     my $self = bless {
-        lines          => [],
-        vars           => [],
-        last_line_num  => -1,
-        labels         => {},
-        autostart      => 0,
-        autostart_line => 0,
-        increment      => 10,
-        reminvert      => 0,
-        fast           => 0,
+        lines           => [],
+        vars            => [],
+        dfile           => [],
+        dfile_collapsed =>  0,
+        last_line_num   => -1,
+        labels          => {},
+        autostart       => 0,
+        autostart_line  => 0,
+        increment       => 10,
+        reminvert       => 0,
+        fast            => 0,
     }, $class;
     return $self;
 }
@@ -1013,6 +1073,14 @@ sub parse_pragma {
     if ( $line->text =~ /^\s*\#\s*VARS\s*(.*?)\s*=\s*(.*)/ ) {
         my $var = $self->parse_var( $line, $1, $2 );
         push @{ $self->vars }, $var if defined $var;
+        return 1;
+    }
+    if ( $line->text =~ /^\s*\#\s*DFILE\s*=\s*\"(.*)\"/ ) {
+        push @{ $self->dfile }, $1;
+        return 1;
+    }
+    if ( $line->text =~ /^\s*\#\s*DFILE_COLLAPSED\s*=\s*(\d+)/ ) {
+        $self->dfile_collapsed( $1 == 0 ? 0 : 1 );
         return 1;
     }
     if ( $line->text =~ /^\s*#/ ) {
@@ -1240,10 +1308,7 @@ sub as_bytes {
     my $e_ppc      = $prog eq '' ? 0 : unpack( "n", substr( $prog, 0, 2 ) );
 
     # Create an empty display file
-    my $dfile = pack( "C", 0x76 );
-    for ( 1 .. 24 ) {
-        $dfile .= ( pack( "C", 0 ) x 32 ) . pack( "C", 0x76 );
-    }
+    my $dfile       = $self->dfile_as_bytes();
     my $dfile_start = $prog_start + length($prog);
 
     # Create an empty vars area
@@ -1312,6 +1377,28 @@ sub as_bytes {
     return $bytes;
 }
 
+sub dfile_as_bytes {
+    my ($self) = @_;
+
+    my @lines = @{ $self->dfile };
+    my $bytes = pack( "C", 0x76 );
+    for ( 1 .. 24 ) {
+        my $line = shift @lines // '';
+        if ( $self->dfile_collapsed ) {
+            $line =~ s/\s+$//;
+        }
+        else {
+            $line .= ' ' x 32;
+        }
+        $line = substr( $line, 0, 32 );
+
+        $bytes .= pack( "C*", map { ord } split //, encode_chars($line) );
+        $bytes .= pack( "C", 0x76 );
+    }
+
+    return $bytes;
+}
+
 sub vars_as_bytes {
     my ($self) = @_;
 
@@ -1368,7 +1455,7 @@ sub vars_as_bytes {
                     my $value = $var->value->[$_];
 
                     # make fixed length
-                    $value .= ' ' x ( $last_dim - length($value) );
+                    $value .= ' ' x $last_dim;
                     $value = substr( $value, 0, $last_dim );
 
                     # convert to bytes
@@ -1566,6 +1653,21 @@ If set to 1, sets the computer in FAST mode.
 Specifies the initial values of variables in the BASIC program. I in the
 example above is a loop variable with value 0, limit 10, step 1 and line 
 number 20.
+
+=head3 #DFILE
+
+    #DFILE="LINE 1"
+    #DFILE="LINE 2"
+    ...
+
+Defines the initial contents of the display file. Each line of the display
+file is defined by a separate #DFILE pragma.
+
+=head3 #DFILE_COLLAPSED
+
+    #DFILE_COLLAPSED=[0|1]
+
+Saves the display file in collapsed form.
 
 =head1 SEE ALSO
 

@@ -110,6 +110,21 @@ Specifies the initial values of variables in the BASIC program. I in the
 example above is a loop variable with value 0, limit 10, step 1 and line 
 number 20.
 
+### #DFILE
+
+    #DFILE="LINE 1"
+    #DFILE="LINE 2"
+    ...
+
+Defines the initial contents of the display file. Each line of the display
+file is defined by a separate #DFILE pragma.
+
+### #DFILE\_COLLAPSED
+
+    #DFILE_COLLAPSED=[0|1]
+
+Saves the display file in collapsed form.
+
 # SEE ALSO
 
 [ZX81](https://metacpan.org/pod/ZX81)

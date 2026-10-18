@@ -77,6 +77,14 @@ If AUTOSTART\_LINE is set, sets the line number where the BASIC program
 will start automatically when the tape is loaded, defaults to the first
 line of the BASIC program.
 
+### #INCREMENT
+
+    #INCREMENT=[INCREMENT]
+
+If INCREMENT is set, specifies the line number increment between consecutive
+lines in the BASIC program, defaults to 10. Can be entered multiple times in
+the source file, and takes effect from the line where it is set.
+
 # SEE ALSO
 
 [ZX81](https://metacpan.org/pod/ZX81)

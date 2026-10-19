@@ -125,6 +125,19 @@ file is defined by a separate #DFILE pragma.
 
 Saves the display file in collapsed form.
 
+### #ASM
+
+    #ASM
+    start:
+        ld bc, 1234
+        ret
+    #ENDASM
+        PRINT USR &start
+
+The lines between #ASM and #ENDASM are collected and assembled with an ORG
+of 0x4082, and a 0 REM line is created with the binary image of the assembled
+code. BASIC can use ASM labels via '&' NAME.
+
 # SEE ALSO
 
 [ZX81](https://metacpan.org/pod/ZX81)

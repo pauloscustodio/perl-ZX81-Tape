@@ -1259,11 +1259,17 @@ sub compile {
                 $text = $self->invert_rem($text);
             }
 
+            # convert hex notation to decimal
+            $text =~ s/0x([0-9A-Fa-f]+)/hex($1)/ge;
+            $text =~ s/\$([0-9A-Fa-f]+)/hex($1)/ge;
+
+            # convert BASIC to ZX81 tokens
             my $line_bytes = tokenize_basic($text);
             $line->bytes($line_bytes);
             $bin .= $line_bytes;
         }
 
+        # check if size changed; recompute if yes
         my $new_size = length($bin);
         if ( $old_size != $new_size ) {
             $old_size = $new_size;

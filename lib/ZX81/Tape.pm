@@ -5,7 +5,7 @@ use Path::Tiny;
 use CPU::Z80::Assembler;
 use ZX81::Tokenize qw( tokenize_basic encode_chars encode_float );
 
-our $VERSION = '0.004';
+our $VERSION = '0.005';
 
 use Exporter qw(import);
 
@@ -1689,6 +1689,8 @@ Line numbers are optional and the source program is numbered before conversion
 to the tape format. The start line number is 10 by default and the increment
 between consecutive lines is also 10 by default. A line with a line number
 resets the numbering from there on. Line numbers from 0 to 9999 are accepted.
+
+BASIC code can use numbers in hexadecimal with the notation $hh and 0xhh.
 
 =head2 LABELS
 

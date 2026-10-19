@@ -47,6 +47,8 @@ to the tape format. The start line number is 10 by default and the increment
 between consecutive lines is also 10 by default. A line with a line number
 resets the numbering from there on. Line numbers from 0 to 9999 are accepted.
 
+BASIC code can use numbers in hexadecimal with the notation $hh and 0xhh.
+
 ## LABELS
 
 Labels can be written before the BASIC statement as '@' NAME ':', and can be

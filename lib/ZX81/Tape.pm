@@ -597,7 +597,7 @@ sub list_p {
                 if ( $code =~ /^\w\w/ ) {
                     $code = " $code ";
                 }
-                printf $bas_fh $code;
+                print $bas_fh $code;
             }
             else {
                 printf $bas_fh "\\%02X", $byte;

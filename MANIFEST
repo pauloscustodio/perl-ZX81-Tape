@@ -143,6 +143,9 @@ t/t2p/expected/line_num_07.txt
 t/t2p/expected/numbers.bas
 t/t2p/expected/numbers.p
 t/t2p/expected/numbers.txt
+t/t2p/expected/percent_escape.bas
+t/t2p/expected/percent_escape.p
+t/t2p/expected/percent_escape.txt
 t/t2p/expected/pound.bas
 t/t2p/expected/pound.p
 t/t2p/expected/pound.txt
@@ -191,6 +194,8 @@ t/t2p/input/line_num_05.bas
 t/t2p/input/line_num_06.bas
 t/t2p/input/line_num_07.bas
 t/t2p/input/numbers.bas
+t/t2p/input/percent_escape.bas
+t/t2p/input/percent_escape.p
 t/t2p/input/pound.bas
 t/t2p/input/quote_escape.bas
 t/t2p/input/rem_mcode.bas

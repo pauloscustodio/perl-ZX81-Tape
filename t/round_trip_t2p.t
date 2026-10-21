@@ -1,5 +1,9 @@
 # Test round-trip to files generated with t2p
 
+#use warnings FATAL => 'all';
+#use Carp qw(confess);
+#$SIG{__WARN__} = sub { confess @_ };
+
 use Modern::Perl;
 use Path::Tiny;
 use Test::HexDifferences;

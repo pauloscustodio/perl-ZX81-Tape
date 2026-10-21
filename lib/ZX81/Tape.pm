@@ -676,20 +676,19 @@ sub decode_var {
     if ( ( $byte & 0xE0 ) == 0xA0 ) {
 
         # multiple letter variable
-        $byte = ( $byte & 0x3F ) | 0x20;
+        $byte = $byte & 0x3F;
         my $name = $zx81chars{$byte};    # first letter
 
         while ( ( $mem->peek($addr) & 0xC0 ) == 0x00 )
         {                                # second..before-last letters
             $byte = $mem->peek( $addr++ );
-            $byte = ( $byte & 0x3F ) | 0x20;
             $name .= $zx81chars{$byte};    # second..before-last letters
         }
 
         $byte = $mem->peek( $addr++ );
         ( $byte & 0xC0 ) == 0x80
           or die "decode_var: unexpected byte $byte at $addr";
-        $byte = ( $byte & 0x3F ) | 0x20;
+        $byte = $byte & 0x3F;
         $name .= $zx81chars{$byte};    # last letter
 
         my @bytes;
@@ -1406,11 +1405,11 @@ sub as_bytes {
     my $prog_start = $sysvars{PROG};
     my $e_ppc      = $prog eq '' ? 0 : unpack( "n", substr( $prog, 0, 2 ) );
 
-    # Create an empty display file
+    # Create display file
     my $dfile       = $self->dfile_as_bytes();
     my $dfile_start = $prog_start + length($prog);
 
-    # Create an empty vars area
+    # Create vars area
     my $vars       = $self->vars_as_bytes();
     my $vars_start = $dfile_start + length($dfile);
     my $mem_end    = $vars_start + length($vars);
@@ -1618,9 +1617,9 @@ sub vars_as_bytes {
                     # 101-letter, 001-letter, 101-letter
                     $bytes .= pack( "C", ( $name_bytes[0] & 0x3F ) | 0xA0 );
                     for ( 1 .. $#name_bytes - 1 ) {
-                        $bytes .= pack( "C", $name_bytes[$_] & 0x3F );
+                        $bytes .= pack( "C", $name_bytes[$_] );
                     }
-                    $bytes .= pack( "C", ( $name_bytes[-1] & 0x3F ) | 0x80 );
+                    $bytes .= pack( "C", $name_bytes[-1] | 0x80 );
                 }
 
                 # pack value

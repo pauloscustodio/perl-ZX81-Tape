@@ -187,7 +187,7 @@ D_FILE Section:
 43B1        76                          \76 
 
 VARS Section:
-43B2        AX=12
+43B2        A1=12
 43B2        A6 9D 84 40 00 00 00        %A %1 \84 RND        
 43B9        end marker
 43B9        80                          %  

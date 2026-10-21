@@ -119,6 +119,9 @@ t/t2p/expected/labels_06.txt
 t/t2p/expected/labels_07.bas
 t/t2p/expected/labels_07.p
 t/t2p/expected/labels_07.txt
+t/t2p/expected/letter_num_ident.bas
+t/t2p/expected/letter_num_ident.p
+t/t2p/expected/letter_num_ident.txt
 t/t2p/expected/line_num_01.bas
 t/t2p/expected/line_num_01.p
 t/t2p/expected/line_num_01.txt
@@ -186,6 +189,7 @@ t/t2p/input/labels_04.bas
 t/t2p/input/labels_05.bas
 t/t2p/input/labels_06.bas
 t/t2p/input/labels_07.bas
+t/t2p/input/letter_num_ident.bas
 t/t2p/input/line_num_01.bas
 t/t2p/input/line_num_02.bas
 t/t2p/input/line_num_03.bas
@@ -209,3 +213,4 @@ t/zxtext2p/doc/zxtext2p.html
 t/zxtext2p/gpl.txt
 t/zxtext2p/readme.txt
 t/zxtext2p/zxtext2p.c
+TODO.md

@@ -5,7 +5,7 @@ use Path::Tiny;
 use CPU::Z80::Assembler;
 use ZX81::Tokenize qw( tokenize_basic encode_chars encode_float );
 
-our $VERSION = '0.005';
+our $VERSION = '0.006';
 
 use Exporter qw(import);
 

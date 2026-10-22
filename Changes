@@ -14,7 +14,7 @@
     - Accept hex notation $hh and 0xhh in BASIC
     - Add #ASM / #ENDASM to insert assembly code in line 0 REM
 
-0.006 XXXX-XX-XX
+0.006 2026-10-22
     - Fix Invalid conversion in printf when inverse chars "%H" are used
     - Fix coding of multi-character numeric variables; was wrong for names
       with digits 0..3

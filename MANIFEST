@@ -56,9 +56,12 @@ t/bas/input/dfile_02.bas
 t/bas/input/dfile_collapsed_01.bas
 t/bas/input/dfile_collapsed_02.bas
 t/bas/input/vars_loop.bas
+t/expected/malformed.txt
+t/input/malformed.bas
 t/labels_err.t
 t/line_num_err.t
 t/Makefile
+t/malformed.t
 t/p/expected/empty.bas
 t/p/expected/empty.txt
 t/p/expected/fast.bas

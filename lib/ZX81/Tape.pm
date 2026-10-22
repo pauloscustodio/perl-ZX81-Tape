@@ -608,6 +608,8 @@ sub list_p {
         }
 
         # BASIC text
+        check_numbers( $mem, $addr + 4, $size - 1 );
+
         my $in_quote = 0;
         for ( my $i = 0 ; $i < $size - 1 ; $i++ ) {
             my $byte = $mem->peek( $addr + 4 + $i );
@@ -642,6 +644,90 @@ sub list_p {
 
         $addr += 4 + $size;
         next;
+    }
+}
+
+# check that numbers have the correct floating point representation
+sub check_numbers {
+    my ( $mem, $addr, $size ) = @_;
+
+    # REM line
+    if ( $mem->peek($addr) == 0xEA ) {
+        return;
+    }
+
+    # scan the line for numbers
+    my $p = $addr;
+    while ( $p < $addr + $size ) {
+        my $byte = $mem->peek($p);
+
+        # quoted string
+        if ( $byte == 0x0B ) {
+            $p++;
+            while ( $p < $addr + $size && $mem->peek($p) != 0x0B ) {
+                $p++;
+            }
+            next;
+        }
+
+        # number
+        if ( $byte >= 0x1B && $byte <= 0x25 ) {    # '.', '0'..'9'
+                                                   # collect mantissa
+            my $digits = "";
+            while ($p < $addr + $size
+                && $mem->peek($p) >= 0x1B
+                && $mem->peek($p) <= 0x25 )
+            {
+                $digits .= $zx81chars{ $mem->peek($p) };
+                $p++;
+            }
+
+            # collect exponent
+            if ( $mem->peek($p) == 0x2A ) {        # 'E'
+                $digits .= $zx81chars{ $mem->peek($p) };
+                $p++;
+
+                # sign
+                if ( $p < $addr + $size
+                    && ( $mem->peek($p) == 0x15 || $mem->peek($p) == 0x16 ) )
+                {
+                    $digits .= $zx81chars{ $mem->peek($p) };
+                    $p++;
+                }
+                while ($p < $addr + $size
+                    && $mem->peek($p) >= 0x1C
+                    && $mem->peek($p) <= 0x25 )
+                {
+                    $digits .= $zx81chars{ $mem->peek($p) };
+                    $p++;
+                }
+            }
+
+            # collect floating point form
+            if ( $mem->peek($p) == 0x7E ) {
+                my @fp_bytes;
+                for my $i ( 1 .. 5 ) {
+                    push @fp_bytes, $mem->peek( $p + $i );
+                }
+
+                $digits = lc($digits);
+                my $value1 = eval($digits);
+                $@ and die "invalid number '$digits'";
+                my $value2 = zx81_to_float(@fp_bytes);
+
+                if ( abs( $value1 - $value2 ) > 1e-10 ) {
+                    die
+                      "error: wrong floating point representation at address ",
+                      sprintf( "0x%04X", $p + 1 ), ": $value1 != $value2\n";
+                }
+
+                $p += 6;
+            }
+            next;
+        }
+
+        # anything else
+        $p++;
     }
 }
 

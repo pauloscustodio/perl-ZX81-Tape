@@ -1360,6 +1360,9 @@ sub compile {
             $text =~ s/0x([0-9A-Fa-f]+)/hex($1)/ge;
             $text =~ s/\$([0-9A-Fa-f]+)/hex($1)/ge;
 
+            # evaluate expressions in {}
+            $text =~ s/\{(.*?)\}/eval_expr($1)/ge;
+
             # convert BASIC to ZX81 tokens
             my $line_bytes = tokenize_basic($text);
             $line->bytes($line_bytes);
@@ -1373,6 +1376,13 @@ sub compile {
             $pass     = 0;           # repeat if size changed
         }
     }
+}
+
+sub eval_expr {
+    my ($expr) = @_;
+    my $value = eval($expr);
+    $@ and die "eval '$expr' failed: $@";
+    return $value;
 }
 
 sub invert_rem {
